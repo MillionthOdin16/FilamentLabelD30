@@ -1,0 +1,7 @@
+{
+  "name": "Filament ID & Print",
+  "description": "Scan 3D printer filament spools, extract data using AI, and print perfectly formatted labels on your Phomemo printer.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
