@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Camera, Printer, RotateCcw, PenTool, Loader2, Info, Bluetooth, Ruler, History, ArrowRight, Battery, BatteryFull, BatteryLow, BatteryMedium, ExternalLink, AlertTriangle, Eye, X, Download, Upload, Image as ImageIcon } from 'lucide-react';
+import { Camera, Printer, RotateCcw, PenTool, Loader2, Info, Bluetooth, Ruler, History, ArrowRight, Battery, BatteryFull, BatteryLow, BatteryMedium, ExternalLink, AlertTriangle, Eye, X, Download, Upload, Image as ImageIcon, Edit3 } from 'lucide-react';
 import { AppState, FilamentData, LABEL_PRESETS, LabelPreset, PrintSettings, HistoryEntry, LabelTheme, PrinterInfo } from './types';
 import { analyzeFilamentImage } from './services/geminiService';
 import { connectPrinter, printLabel, getBatteryLevel, getDeviceDetails, checkPrinterStatus } from './services/printerService';
@@ -100,6 +100,12 @@ const App: React.FC = () => {
 
   const triggerFileUpload = () => {
     fileInputRef.current?.click();
+  };
+
+  const handleManualEntry = () => {
+    setFilamentData(DEFAULT_DATA);
+    setErrorMsg(null);
+    setState(AppState.EDITING);
   };
 
   const handleImageCaptured = async (imageSrc: string) => {
@@ -315,6 +321,13 @@ const App: React.FC = () => {
                       >
                          <ImageIcon size={24} className="text-gray-500 group-hover:text-cyan-400 transition-colors" />
                          <span className="text-[10px] font-bold text-gray-500 uppercase">Gallery</span>
+                      </button>
+                      <button 
+                        onClick={handleManualEntry}
+                        className="group w-24 h-16 rounded-2xl bg-gray-900 border border-gray-800 hover:border-cyan-600 transition-all duration-300 flex flex-col items-center justify-center gap-1"
+                      >
+                         <Edit3 size={18} className="text-gray-500 group-hover:text-cyan-400 transition-colors" />
+                         <span className="text-[10px] font-bold text-gray-500 group-hover:text-cyan-400 uppercase">Manual</span>
                       </button>
                   </div>
               </div>

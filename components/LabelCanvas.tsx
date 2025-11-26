@@ -539,7 +539,9 @@ const LabelCanvas: React.FC<LabelCanvasProps> = ({
           default: renderModern();
       }
 
-      onCanvasReady(canvas);
+      if (onCanvasReady) {
+        onCanvasReady(canvas);
+      }
     };
 
     render();
