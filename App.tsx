@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Camera, Printer, RotateCcw, PenTool, Loader2, Info, Bluetooth, Ruler, History, ArrowRight, Battery, BatteryFull, BatteryLow, BatteryMedium, ExternalLink, AlertTriangle, Eye, X, Download, Upload, Image as ImageIcon } from 'lucide-react';
+import { Camera, Printer, RotateCcw, PenTool, Loader2, Info, Bluetooth, Ruler, History, ArrowRight, Battery, BatteryFull, BatteryLow, BatteryMedium, ExternalLink, AlertTriangle, Eye, X, Download, Upload, Image as ImageIcon, QrCode } from 'lucide-react';
 import { AppState, FilamentData, LABEL_PRESETS, LabelPreset, PrintSettings, HistoryEntry, LabelTheme, PrinterInfo } from './types';
 import { analyzeFilamentImage } from './services/geminiService';
 import { connectPrinter, printLabel, getBatteryLevel, getDeviceDetails, checkPrinterStatus } from './services/printerService';
@@ -9,6 +9,7 @@ import LabelEditor from './components/LabelEditor';
 import LabelCanvas from './components/LabelCanvas';
 import AnalysisView from './components/AnalysisView';
 import PrinterTools from './components/PrinterTools';
+import QrScanner from './components/QrScanner';
 
 const DEFAULT_DATA: FilamentData = {
   brand: 'GENERIC',
@@ -100,6 +101,22 @@ const App: React.FC = () => {
 
   const triggerFileUpload = () => {
     fileInputRef.current?.click();
+  };
+
+  const handleQrScanSuccess = (decodedText: string) => {
+    try {
+      const data = JSON.parse(decodedText);
+      // basic validation
+      if (data.brand && data.material && data.colorName) {
+        setFilamentData(data);
+        setState(AppState.EDITING);
+      } else {
+        throw new Error("Invalid QR code data");
+      }
+    } catch (error) {
+      setErrorMsg("Invalid QR code. Please scan a valid Filament ID label.");
+      setState(AppState.HOME);
+    }
   };
 
   const handleImageCaptured = async (imageSrc: string) => {
@@ -316,6 +333,13 @@ const App: React.FC = () => {
                          <ImageIcon size={24} className="text-gray-500 group-hover:text-cyan-400 transition-colors" />
                          <span className="text-[10px] font-bold text-gray-500 uppercase">Gallery</span>
                       </button>
+                      <button
+                        onClick={() => setState(AppState.SCANNING)}
+                        className="group w-24 h-24 rounded-2xl bg-gray-900 border border-gray-800 hover:border-gray-600 transition-all duration-300 flex flex-col items-center justify-center gap-2"
+                      >
+                         <QrCode size={24} className="text-gray-500 group-hover:text-cyan-400 transition-colors" />
+                         <span className="text-[10px] font-bold text-gray-500 uppercase">Scan Label</span>
+                      </button>
                   </div>
               </div>
 
@@ -353,6 +377,19 @@ const App: React.FC = () => {
             <div className="text-xs text-gray-600 flex items-center gap-2 pt-8">
                <Bluetooth size={14} /> 
                <span>Supports Phomemo M110, M02, D30, Q30</span>
+            </div>
+          </div>
+        )}
+
+        {state === AppState.SCANNING && (
+          <div className="flex flex-col items-center space-y-4">
+            <h2 className="text-2xl font-bold">Scan QR Code</h2>
+            <p className="text-gray-400">Point your camera at a Filament ID QR code.</p>
+            <div className="w-full max-w-sm">
+              <QrScanner
+                onScanSuccess={handleQrScanSuccess}
+                onCancel={() => setState(AppState.HOME)}
+              />
             </div>
           </div>
         )}

@@ -11,6 +11,14 @@ export interface FilamentData {
   weight: string;
   notes: string;
   hygroscopy: 'low' | 'medium' | 'high';
+  currentWeightGrams?: number;
+  remainingWeightGrams?: number;
+  spoolWeightGrams?: number;
+  purchaseDate?: string;
+  firstUsedDate?: string;
+  lastUsedDate?: string;
+  location?: string;
+  supplier?: string;
   source?: string; // e.g. "Gemini 2.5 Flash"
   referenceUrl?: string; // e.g. "https://polymaker.com/..."
   confidence?: number; // 0-100
@@ -60,7 +68,8 @@ export enum AppState {
   CAMERA,
   ANALYZING,
   EDITING,
-  PRINTING_SUCCESS
+  PRINTING_SUCCESS,
+  SCANNING
 }
 
 export interface LabelPreset {

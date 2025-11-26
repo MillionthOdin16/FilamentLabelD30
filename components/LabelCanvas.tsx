@@ -202,7 +202,7 @@ const LabelCanvas: React.FC<LabelCanvasProps> = ({
       let qrImg: HTMLImageElement | null = null;
       if (shouldQr) {
         try {
-          const qrData = `${data.brand}|${data.material}|${data.minTemp}-${data.maxTemp}`;
+          const qrData = JSON.stringify(data);
           const url = await QRCode.toDataURL(qrData, { 
              margin: 0, 
              errorCorrectionLevel: 'M',

@@ -22,9 +22,52 @@ const LabelEditor: React.FC<LabelEditorProps> = ({
 }) => {
   const [showAlts, setShowAlts] = useState(false);
 
-  const handleChange = (key: keyof FilamentData, value: string | number) => {
-    onChange({ ...data, [key]: value });
+  const handleChange = (key: keyof FilamentData, value: string | number | undefined) => {
+    let sanitizedValue = value;
+    if (typeof sanitizedValue === 'number' && isNaN(sanitizedValue)) {
+      sanitizedValue = undefined;
+    }
+
+    const newData = { ...data, [key]: sanitizedValue };
+
+    if (key === 'currentWeightGrams' || key === 'spoolWeightGrams') {
+      const currentWeight = (key === 'currentWeightGrams' ? sanitizedValue : data.currentWeightGrams) as number | undefined;
+      const spoolWeight = (key === 'spoolWeightGrams' ? sanitizedValue : data.spoolWeightGrams) as number | undefined;
+
+      if (currentWeight !== undefined && spoolWeight !== undefined) {
+        const remaining = currentWeight - spoolWeight;
+        newData.remainingWeightGrams = Math.max(0, remaining);
+      } else {
+        newData.remainingWeightGrams = undefined;
+      }
+    }
+
+    onChange(newData);
   };
+
+  const parseWeight = (weightStr: string): number => {
+    if (!weightStr) return 0;
+    const match = weightStr.match(/(\d+)\s*(kg|g)/i);
+    if (match) {
+      const value = parseInt(match[1]);
+      const unit = match[2].toLowerCase();
+      if (unit === 'kg') {
+        return value * 1000;
+      }
+      return value;
+    }
+    // a number without units is assumed to be grams
+    const justNumber = weightStr.match(/\d+/);
+    if (justNumber) {
+        return parseInt(justNumber[0]);
+    }
+    return 0;
+  };
+
+  const initialWeightGrams = parseWeight(data.weight);
+  const remainingPercentage = initialWeightGrams > 0 && data.remainingWeightGrams !== undefined
+    ? Math.max(0, Math.min(100, (data.remainingWeightGrams / initialWeightGrams) * 100))
+    : 0;
 
   const updateSetting = (key: keyof PrintSettings, value: any) => {
     onSettingsChange({ ...settings, [key]: value });
@@ -214,6 +257,65 @@ const LabelEditor: React.FC<LabelEditorProps> = ({
                   className="w-full bg-gray-950 border border-gray-750 rounded p-2 text-center text-white"
               />
             </div>
+          </div>
+        </div>
+      </div>
+
+      {/* --- INVENTORY TRACKING --- */}
+      <div className="p-4 bg-gray-850 rounded-xl shadow-xl border border-gray-750 space-y-4">
+        <div className="flex items-center gap-2 text-green-400">
+          <CheckCircle2 size={16} />
+          <h3 className="text-xs font-bold uppercase tracking-wider">Inventory Tracking</h3>
+        </div>
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="text-xs text-gray-400 uppercase font-bold tracking-wider mb-1">Current Weight (g)</label>
+            <input
+              type="number"
+              placeholder="e.g. 1220"
+              value={data.currentWeightGrams ?? ''}
+              onChange={(e) => handleChange('currentWeightGrams', e.target.value ? parseInt(e.target.value) : undefined)}
+              className="w-full bg-gray-950 border border-gray-750 rounded p-2 text-white"
+            />
+          </div>
+          <div>
+            <label className="text-xs text-gray-400 uppercase font-bold tracking-wider mb-1">Spool Weight (g)</label>
+            <input
+              type="number"
+              placeholder="e.g. 220"
+              value={data.spoolWeightGrams ?? ''}
+              onChange={(e) => handleChange('spoolWeightGrams', e.target.value ? parseInt(e.target.value) : undefined)}
+              className="w-full bg-gray-950 border border-gray-750 rounded p-2 text-white"
+            />
+          </div>
+        </div>
+        <div>
+          <label className="text-xs text-gray-400 uppercase font-bold tracking-wider mb-1">Location / Notes</label>
+          <input
+            type="text"
+            placeholder="e.g. Shelf A, Box 3"
+            value={data.location || ''}
+            onChange={(e) => handleChange('location', e.target.value)}
+            className="w-full bg-gray-950 border border-gray-750 rounded p-2 text-white"
+          />
+        </div>
+        <div>
+          <label className="text-xs text-gray-400 uppercase font-bold tracking-wider mb-1">Remaining</label>
+          <div className="flex items-center gap-2">
+            <div className="relative w-24">
+              <input
+                type="number"
+                placeholder="Auto"
+                disabled
+                value={data.remainingWeightGrams !== undefined ? Math.round(data.remainingWeightGrams) : ''}
+                className="w-full bg-gray-950 border border-gray-750 rounded p-2 text-white pr-6"
+              />
+              <span className="absolute right-2 top-2 text-gray-500 text-sm">g</span>
+            </div>
+            <div className="w-full bg-gray-700 rounded-full h-2.5">
+                <div className="bg-green-500 h-2.5 rounded-full" style={{width: `${remainingPercentage}%`}}></div>
+            </div>
+            <span className="text-xs font-mono text-gray-400 w-12 text-right">{Math.round(remainingPercentage)}%</span>
           </div>
         </div>
       </div>
