@@ -2,6 +2,9 @@ import React, { useState, useMemo } from 'react';
 import { HistoryEntry, FilamentData } from '../types';
 import { Search, Clock, Trash2, ArrowRight, Package, Calendar, X } from 'lucide-react';
 
+// Constants
+const MAX_MATERIAL_BADGES = 6;
+
 interface FilamentLibraryProps {
   history: HistoryEntry[];
   onSelect: (entry: HistoryEntry) => void;
@@ -102,7 +105,7 @@ const FilamentLibrary: React.FC<FilamentLibraryProps> = ({
       {/* Material Type Pills (when not searching) */}
       {!searchQuery && Object.keys(groupedByMaterial).length > 1 && (
         <div className="flex flex-wrap gap-1">
-          {Object.entries(groupedByMaterial).slice(0, 6).map(([material, entries]) => (
+          {Object.entries(groupedByMaterial).slice(0, MAX_MATERIAL_BADGES).map(([material, entries]) => (
             <span 
               key={material}
               className={`text-[9px] px-2 py-0.5 rounded-full border ${getMaterialBadgeColor(material)}`}

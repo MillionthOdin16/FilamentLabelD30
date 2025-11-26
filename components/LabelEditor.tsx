@@ -61,7 +61,8 @@ const LabelEditor: React.FC<LabelEditorProps> = ({
       bedTempMin: preset.bedTempMin,
       bedTempMax: preset.bedTempMax,
       hygroscopy: preset.hygroscopy,
-      notes: preset.tips || data.notes,
+      // Always use preset tips if available, otherwise keep empty
+      notes: preset.tips || '',
     });
   };
 

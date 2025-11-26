@@ -2,6 +2,9 @@ import React, { useState } from 'react';
 import { MATERIAL_PRESETS, MaterialPreset, FilamentData } from '../types';
 import { Zap, ChevronRight, Info, Thermometer, Droplets, AlertTriangle } from 'lucide-react';
 
+// Constants
+const HYGROSCOPY_HIGH = 'high' as const;
+
 interface QuickMaterialPickerProps {
   onSelect: (preset: MaterialPreset) => void;
   currentMaterial?: string;
@@ -20,14 +23,6 @@ const QuickMaterialPicker: React.FC<QuickMaterialPickerProps> = ({ onSelect, cur
       case 'low': return 'text-green-400';
       case 'medium': return 'text-yellow-400';
       case 'high': return 'text-red-400';
-    }
-  };
-
-  const getHygroscopyIcon = (level: 'low' | 'medium' | 'high') => {
-    switch (level) {
-      case 'low': return '💧';
-      case 'medium': return '💧💧';
-      case 'high': return '💧💧💧';
     }
   };
 
@@ -124,7 +119,7 @@ const QuickMaterialPicker: React.FC<QuickMaterialPickerProps> = ({ onSelect, cur
               <span>{hoveredPreset.tips}</span>
             </div>
           )}
-          {hoveredPreset.hygroscopy === 'high' && (
+          {hoveredPreset.hygroscopy === HYGROSCOPY_HIGH && (
             <div className="flex items-center gap-2 text-yellow-500 mt-2">
               <AlertTriangle size={12} />
               <span className="text-[10px]">Requires drying before use</span>
