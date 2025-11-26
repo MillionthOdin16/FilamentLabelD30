@@ -1,7 +1,17 @@
 
 import React, { useState } from 'react';
 import { FilamentData, PrintSettings, LabelTheme } from '../types';
-import { Copy, QrCode, Sun, Moon, Minus, Plus, Palette, Calendar, Layers, Sparkles, Droplets, Download, Link, Eye, EyeOff, AlertTriangle, ChevronDown, CheckCircle2, Thermometer, Weight, Type } from 'lucide-react';
+import { Copy, QrCode, Sun, Moon, Minus, Plus, Palette, Calendar, Layers, Sparkles, Droplets, Download, Link, Eye, EyeOff, AlertTriangle, ChevronDown, CheckCircle2, Thermometer, Weight, Type, Grid3X3, Zap, FileText } from 'lucide-react';
+
+// Theme descriptions for better UX
+const THEME_INFO: Record<LabelTheme, { icon: React.ElementType; description: string }> = {
+  [LabelTheme.SWATCH]: { icon: Layers, description: 'QR + full details' },
+  [LabelTheme.MINIMAL]: { icon: FileText, description: 'Clean & simple' },
+  [LabelTheme.TECHNICAL]: { icon: Grid3X3, description: 'Grid layout' },
+  [LabelTheme.BOLD]: { icon: Zap, description: 'Large material' },
+  [LabelTheme.MODERN]: { icon: Palette, description: 'Color accent' },
+  [LabelTheme.MAINTENANCE]: { icon: Droplets, description: 'With checkboxes' },
+};
 
 interface LabelEditorProps {
   data: FilamentData;
@@ -236,32 +246,37 @@ const LabelEditor: React.FC<LabelEditorProps> = ({
 
         {/* Row 2: Themes */}
         <div className="bg-gray-900 p-3 rounded-lg border border-gray-800">
-            <div className="flex items-center gap-2 mb-2 text-gray-400">
+            <div className="flex items-center gap-2 mb-3 text-gray-400">
                 <Palette size={14} />
                 <span className="text-xs font-bold uppercase">Label Style</span>
             </div>
             <div className="grid grid-cols-3 gap-2">
-                {[LabelTheme.SWATCH, LabelTheme.TECHNICAL, LabelTheme.BOLD, LabelTheme.MODERN, LabelTheme.MAINTENANCE].map(theme => (
-                    <button
-                        key={theme}
-                        onClick={() => handleThemeChange(theme)}
-                        className={`py-3 rounded-lg text-[10px] font-bold uppercase transition-all flex flex-col items-center justify-center gap-1 border
-                            ${settings.theme === theme 
-                                ? 'bg-cyan-600 border-cyan-400 text-white shadow-lg shadow-cyan-900/40 scale-105 z-10' 
-                                : 'bg-gray-800 border-gray-700 text-gray-500 hover:bg-gray-750 hover:border-gray-600'}
-                        `}
-                    >
-                        {theme === LabelTheme.SWATCH && <Layers size={14} />}
-                        {theme === LabelTheme.MAINTENANCE && <Droplets size={14} />}
-                        {theme === LabelTheme.TECHNICAL && <Link size={14} />}
-                        {theme === LabelTheme.BOLD && <Sparkles size={14} />}
-                        {theme === LabelTheme.MODERN && <Palette size={14} />}
-                        <span>{theme}</span>
-                        {theme === LabelTheme.SWATCH && settings.theme === theme && (
-                           <span className="absolute -top-1 -right-1 bg-yellow-400 text-black text-[8px] px-1 rounded-full animate-bounce">NEW</span>
-                        )}
-                    </button>
-                ))}
+                {[LabelTheme.SWATCH, LabelTheme.MINIMAL, LabelTheme.TECHNICAL, LabelTheme.BOLD, LabelTheme.MODERN, LabelTheme.MAINTENANCE].map(theme => {
+                    const info = THEME_INFO[theme];
+                    const Icon = info.icon;
+                    const isSelected = settings.theme === theme;
+                    
+                    return (
+                        <button
+                            key={theme}
+                            onClick={() => handleThemeChange(theme)}
+                            className={`relative p-2.5 rounded-xl text-[10px] font-bold uppercase transition-all flex flex-col items-center justify-center gap-1.5 border
+                                ${isSelected 
+                                    ? 'bg-gradient-to-br from-cyan-600 to-blue-600 border-cyan-400 text-white shadow-lg shadow-cyan-500/30 scale-[1.02]' 
+                                    : 'bg-gray-800/50 border-gray-700 text-gray-400 hover:bg-gray-800 hover:border-gray-600 hover:text-gray-300'}
+                            `}
+                        >
+                            <Icon size={18} className={isSelected ? 'text-white' : ''} />
+                            <span className="tracking-wide">{theme}</span>
+                            <span className={`text-[8px] font-normal normal-case ${isSelected ? 'text-cyan-100' : 'text-gray-500'}`}>
+                                {info.description}
+                            </span>
+                            {theme === LabelTheme.SWATCH && isSelected && (
+                               <span className="absolute -top-1.5 -right-1.5 bg-yellow-400 text-black text-[7px] px-1.5 py-0.5 rounded-full font-black shadow-lg">★</span>
+                            )}
+                        </button>
+                    );
+                })}
             </div>
         </div>
 

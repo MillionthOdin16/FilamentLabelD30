@@ -530,12 +530,57 @@ const LabelCanvas: React.FC<LabelCanvasProps> = ({
          });
       };
 
+      const renderMinimal = () => {
+          // Ultra-clean minimal design - just the essentials
+          if (isMicro) {
+              // For micro labels: Material | Temps
+              const col1W = safeWidth * 0.55;
+              drawTextFit(data.material, startX, startY, col1W, safeHeight, '900', 32*s, 'sans-serif', fg, 'left', 'middle');
+              drawTextFit(`${data.minTemp}-${data.maxTemp}°`, startX + col1W, startY, safeWidth - col1W, safeHeight, 'bold', 18*s, 'monospace', fg, 'right', 'middle');
+              return;
+          }
+
+          // Standard minimal layout
+          const headerH = safeHeight * 0.15;
+          const mainH = safeHeight * 0.50;
+          const footerH = safeHeight * 0.35;
+          
+          // Subtle top line
+          ctx.strokeStyle = fg;
+          ctx.lineWidth = 1 * s;
+          ctx.beginPath();
+          ctx.moveTo(startX, startY + headerH);
+          ctx.lineTo(startX + safeWidth, startY + headerH);
+          ctx.stroke();
+
+          // Brand - small at top
+          drawTextFit(data.brand.toUpperCase(), startX, startY, safeWidth, headerH, 'normal', 22*s, 'sans-serif', fg, 'left', 'middle');
+
+          // Material - Large and centered
+          drawTextFit(data.material, startX, startY + headerH, safeWidth, mainH, '900', 100*s, 'sans-serif', fg, 'center', 'middle');
+
+          // Footer info
+          const footerY = startY + headerH + mainH;
+          
+          // Subtle bottom line
+          ctx.beginPath();
+          ctx.moveTo(startX, footerY);
+          ctx.lineTo(startX + safeWidth, footerY);
+          ctx.stroke();
+
+          // Color | Temps side by side
+          const halfW = safeWidth / 2;
+          drawTextFit(data.colorName, startX, footerY, halfW - (10*s), footerH, 'normal', 28*s, 'sans-serif', fg, 'left', 'middle');
+          drawTextFit(`${data.minTemp}–${data.maxTemp}°C`, startX + halfW, footerY, halfW, footerH, 'bold', 28*s, 'monospace', fg, 'right', 'middle');
+      };
+
       switch (settings.theme) {
           case LabelTheme.SWATCH: renderSwatch(); break;
           case LabelTheme.TECHNICAL: renderTechnical(); break;
           case LabelTheme.BOLD: renderBold(); break;
           case LabelTheme.MODERN: renderModern(); break;
           case LabelTheme.MAINTENANCE: renderMaintenance(); break;
+          case LabelTheme.MINIMAL: renderMinimal(); break;
           default: renderModern();
       }
 

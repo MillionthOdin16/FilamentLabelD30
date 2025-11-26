@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Camera, Printer, RotateCcw, PenTool, Loader2, Info, Bluetooth, Ruler, History, ArrowRight, Battery, BatteryFull, BatteryLow, BatteryMedium, ExternalLink, AlertTriangle, Eye, X, Download, Upload, Image as ImageIcon, Edit3 } from 'lucide-react';
+import { Camera, Printer, RotateCcw, PenTool, Loader2, Info, Bluetooth, Ruler, History, ArrowRight, Battery, BatteryFull, BatteryLow, BatteryMedium, ExternalLink, AlertTriangle, Eye, X, Download, Upload, Image as ImageIcon, Edit3, CheckCircle2, Sparkles } from 'lucide-react';
 import { AppState, FilamentData, LABEL_PRESETS, LabelPreset, PrintSettings, HistoryEntry, LabelTheme, PrinterInfo } from './types';
 import { analyzeFilamentImage } from './services/geminiService';
 import { connectPrinter, printLabel, getBatteryLevel, getDeviceDetails, checkPrinterStatus } from './services/printerService';
@@ -9,6 +9,8 @@ import LabelEditor from './components/LabelEditor';
 import LabelCanvas from './components/LabelCanvas';
 import AnalysisView from './components/AnalysisView';
 import PrinterTools from './components/PrinterTools';
+import PrintStatus, { PrintStep } from './components/PrintStatus';
+import SuccessView from './components/SuccessView';
 
 const DEFAULT_DATA: FilamentData = {
   brand: 'GENERIC',
@@ -44,12 +46,14 @@ const App: React.FC = () => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [statusMsg, setStatusMsg] = useState<string>('');
+  const [printStep, setPrintStep] = useState<PrintStep>('idle');
   const [batteryLevel, setBatteryLevel] = useState<number | null>(null);
   const [printerInfo, setPrinterInfo] = useState<Partial<PrinterInfo> | null>(null);
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [isIframe, setIsIframe] = useState(false);
   const [showIframeWarning, setShowIframeWarning] = useState(true);
+  const [showSuccess, setShowSuccess] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -138,13 +142,17 @@ const App: React.FC = () => {
   const handlePrint = async () => {
     if (!previewCanvas) return;
     setIsProcessing(true);
-    setStatusMsg('Connecting to printer...');
+    setPrintStep('connecting');
+    setStatusMsg('Searching for printer...');
     setErrorMsg(null);
+    setShowSuccess(false);
+    
     try {
       const device = await connectPrinter();
       
       // Fetch details immediately
-      setStatusMsg('Fetching device info...');
+      setPrintStep('fetching');
+      setStatusMsg('Reading device information...');
       const [battery, details] = await Promise.all([
           getBatteryLevel(device),
           getDeviceDetails(device)
@@ -153,23 +161,39 @@ const App: React.FC = () => {
       if (battery !== null) setBatteryLevel(battery);
       if (details) setPrinterInfo(details);
 
-      setStatusMsg('Checking status...');
+      setPrintStep('checking');
+      setStatusMsg('Verifying printer status...');
       const status = await checkPrinterStatus(device);
       if (status === 'paper_out') throw new Error("Printer reports: Out of Paper");
       if (status === 'cover_open') throw new Error("Printer reports: Cover Open");
 
-      setStatusMsg(`Printing ${printSettings.copies} copies...`);
+      setPrintStep('printing');
+      setStatusMsg(printSettings.copies > 1 
+        ? `Sending ${printSettings.copies} labels to printer...`
+        : 'Sending label to printer...'
+      );
       await printLabel(device, previewCanvas, printSettings);
-      setStatusMsg('Printed successfully!');
-      setTimeout(() => setStatusMsg(''), 3000);
+      
+      setPrintStep('success');
+      setStatusMsg('Print complete!');
+      setShowSuccess(true);
       setState(AppState.PRINTING_SUCCESS);
       
       // Save if new
       if (history.length === 0 || JSON.stringify(history[0].data) !== JSON.stringify(filamentData)) {
          saveToHistory(filamentData);
       }
+      
+      // Reset print step after delay
+      setTimeout(() => {
+        setPrintStep('idle');
+        setStatusMsg('');
+      }, 3000);
+      
     } catch (err: any) {
       console.error("Print Error:", err);
+      setPrintStep('error');
+      
       // Catch Permissions Policy / Security Errors
       const msg = err.message?.toLowerCase() || '';
       const isSecurityError = err.name === 'SecurityError' || 
@@ -179,14 +203,23 @@ const App: React.FC = () => {
 
       if (isSecurityError) {
         setErrorMsg("BLOCKED: Bluetooth access is restricted in this view. You must open the app in a new tab to print.");
+        setStatusMsg("Bluetooth blocked by browser");
       } else if (err.name === 'NotFoundError') {
+        setPrintStep('idle');
         setStatusMsg('');
       } else {
         setErrorMsg(err.message || "Printing failed. Check connection.");
+        setStatusMsg(err.message || "Print failed");
       }
     } finally {
       setIsProcessing(false);
     }
+  };
+
+  const handlePrintMore = () => {
+    setShowSuccess(false);
+    setPrintStep('idle');
+    // Stay in editing state, user can adjust copies and print again
   };
 
   const resetFlow = () => {
@@ -195,6 +228,8 @@ const App: React.FC = () => {
     setPrintSettings(DEFAULT_SETTINGS);
     setErrorMsg(null);
     setStatusMsg('');
+    setPrintStep('idle');
+    setShowSuccess(false);
     setBatteryLevel(null);
     setPrinterInfo(null);
     setCapturedImage(null);
@@ -447,18 +482,39 @@ const App: React.FC = () => {
             <PrinterTools />
           </div>
         )}
+
+        {/* Success View */}
+        {showSuccess && state === AppState.PRINTING_SUCCESS && (
+          <SuccessView
+            data={filamentData}
+            copies={printSettings.copies}
+            onPrintMore={handlePrintMore}
+            onNewLabel={resetFlow}
+            onDownload={handleDownloadPng}
+          />
+        )}
       </main>
 
-      {(state === AppState.EDITING || state === AppState.PRINTING_SUCCESS) && (
+      {(state === AppState.EDITING || state === AppState.PRINTING_SUCCESS) && !showSuccess && (
         <div className="fixed bottom-0 left-0 w-full p-6 bg-gradient-to-t from-gray-950 via-gray-950 to-transparent pointer-events-none z-50">
-          <div className="max-w-xl mx-auto pointer-events-auto">
-            {errorMsg && (
-              <div className="bg-red-500/10 border border-red-500/50 text-red-200 p-4 rounded-lg mb-4 text-sm flex flex-col gap-2 backdrop-blur-md shadow-lg shadow-red-900/20">
+          <div className="max-w-xl mx-auto pointer-events-auto space-y-4">
+            {/* Print Status Indicator */}
+            {printStep !== 'idle' && (
+              <PrintStatus
+                step={printStep}
+                message={statusMsg}
+                copies={printSettings.copies}
+              />
+            )}
+
+            {/* Error Message */}
+            {errorMsg && printStep === 'error' && (
+              <div className="bg-red-500/10 border border-red-500/50 text-red-200 p-4 rounded-xl text-sm flex flex-col gap-2 backdrop-blur-md shadow-lg shadow-red-900/20 animate-fade-in-scale">
                 <div className="flex items-center gap-2 font-bold">
                    <AlertTriangle size={18} className="shrink-0" />
-                   <span>Printing Blocked</span>
+                   <span>Print Error</span>
                 </div>
-                <p className="text-red-200/80 leading-relaxed">
+                <p className="text-red-200/80 leading-relaxed text-xs">
                   {errorMsg}
                 </p>
                 {(errorMsg.includes("BLOCKED") || errorMsg.includes("new tab")) && isHttp && (
@@ -466,31 +522,36 @@ const App: React.FC = () => {
                     href={window.location.href}
                     target="_blank"
                     rel="noreferrer"
-                    className="mt-1 bg-red-600 hover:bg-red-500 text-white px-4 py-2 rounded-lg font-bold text-xs uppercase tracking-wider w-fit flex items-center gap-2 shadow-lg transition-all inline-flex"
+                    className="mt-2 bg-red-600 hover:bg-red-500 text-white px-4 py-2 rounded-lg font-bold text-xs uppercase tracking-wider w-fit flex items-center gap-2 shadow-lg transition-all inline-flex"
                   >
                     Open in New Tab <ExternalLink size={14} />
                   </a>
                 )}
-              </div>
-            )}
-            
-            {statusMsg && !errorMsg && isProcessing && (
-               <div className="bg-cyan-500/10 border border-cyan-500/50 text-cyan-200 p-3 rounded-lg mb-4 text-sm flex items-center gap-2 backdrop-blur-md animate-pulse">
-                <Loader2 size={16} className="animate-spin" /> {statusMsg}
+                <button 
+                  onClick={() => { setErrorMsg(null); setPrintStep('idle'); }}
+                  className="mt-1 text-red-400 hover:text-red-300 text-xs font-bold self-end"
+                >
+                  Dismiss
+                </button>
               </div>
             )}
 
-            <button
-              onClick={handlePrint}
-              disabled={isProcessing}
-              className={`w-full py-4 rounded-xl shadow-2xl font-bold text-lg flex items-center justify-center gap-3 transition-all transform active:scale-95
-                ${isProcessing ? 'bg-gray-800 text-gray-500 cursor-not-allowed' : 'bg-white text-black hover:bg-gray-100 shadow-cyan-500/20'}
-              `}
-            >
-              {isProcessing ? 'PROCESSING...' : (
-                <> <Printer size={24} /> PRINT LABEL {printSettings.copies > 1 ? `(${printSettings.copies})` : ''} </>
-              )}
-            </button>
+            {/* Print Button */}
+            {printStep === 'idle' && !errorMsg && (
+              <button
+                onClick={handlePrint}
+                disabled={isProcessing}
+                className={`w-full py-4 rounded-xl shadow-2xl font-bold text-lg flex items-center justify-center gap-3 transition-all transform active:scale-95 glow-cyan
+                  ${isProcessing ? 'bg-gray-800 text-gray-500 cursor-not-allowed' : 'bg-gradient-to-r from-cyan-500 to-blue-600 text-white hover:from-cyan-400 hover:to-blue-500'}
+                `}
+              >
+                <Printer size={24} /> 
+                PRINT LABEL 
+                {printSettings.copies > 1 && (
+                  <span className="bg-white/20 px-2 py-0.5 rounded-full text-sm">×{printSettings.copies}</span>
+                )}
+              </button>
+            )}
           </div>
         </div>
       )}

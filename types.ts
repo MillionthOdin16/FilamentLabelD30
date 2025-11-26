@@ -23,7 +23,8 @@ export enum LabelTheme {
   TECHNICAL = 'technical',
   BOLD = 'bold',
   MAINTENANCE = 'maintenance',
-  SWATCH = 'swatch'
+  SWATCH = 'swatch',
+  MINIMAL = 'minimal'
 }
 
 export interface PrintSettings {
