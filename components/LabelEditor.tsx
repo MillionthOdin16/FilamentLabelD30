@@ -272,7 +272,7 @@ const LabelEditor: React.FC<LabelEditorProps> = ({
                                 {info.description}
                             </span>
                             {theme === LabelTheme.SWATCH && isSelected && (
-                               <span className="absolute -top-1.5 -right-1.5 bg-yellow-400 text-black text-[7px] px-1.5 py-0.5 rounded-full font-black shadow-lg">★</span>
+                               <span className="absolute -top-1.5 -right-1.5 bg-yellow-400 text-black text-[7px] px-1.5 py-0.5 rounded-full font-black shadow-lg" aria-label="Recommended">★</span>
                             )}
                         </button>
                     );
