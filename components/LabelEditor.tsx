@@ -1,7 +1,8 @@
 
 import React, { useState } from 'react';
-import { FilamentData, PrintSettings, LabelTheme } from '../types';
-import { Copy, QrCode, Sun, Moon, Minus, Plus, Palette, Calendar, Layers, Sparkles, Droplets, Download, Link, Eye, EyeOff, AlertTriangle, ChevronDown, CheckCircle2, Thermometer, Weight, Type, Grid3X3, Zap, FileText } from 'lucide-react';
+import { FilamentData, PrintSettings, LabelTheme, MATERIAL_PRESETS, MaterialPreset } from '../types';
+import { Copy, QrCode, Sun, Moon, Minus, Plus, Palette, Calendar, Layers, Sparkles, Droplets, Download, Link, Eye, EyeOff, AlertTriangle, ChevronDown, CheckCircle2, Thermometer, Weight, Type, Grid3X3, Zap, FileText, MessageSquare, CalendarPlus } from 'lucide-react';
+import QuickMaterialPicker from './QuickMaterialPicker';
 
 // Theme descriptions for better UX
 const THEME_INFO: Record<LabelTheme, { icon: React.ElementType; description: string }> = {
@@ -51,6 +52,19 @@ const LabelEditor: React.FC<LabelEditorProps> = ({
       onSettingsChange({ ...settings, theme });
   };
 
+  const handleMaterialPreset = (preset: MaterialPreset) => {
+    onChange({
+      ...data,
+      material: preset.material,
+      minTemp: preset.minTemp,
+      maxTemp: preset.maxTemp,
+      bedTempMin: preset.bedTempMin,
+      bedTempMax: preset.bedTempMax,
+      hygroscopy: preset.hygroscopy,
+      notes: preset.tips || data.notes,
+    });
+  };
+
   return (
     <div className="w-full max-w-lg mx-auto space-y-4">
       
@@ -95,6 +109,12 @@ const LabelEditor: React.FC<LabelEditorProps> = ({
             </div>
          </div>
       )}
+
+      {/* --- QUICK MATERIAL PICKER --- */}
+      <QuickMaterialPicker 
+        onSelect={handleMaterialPreset}
+        currentMaterial={data.material}
+      />
 
       {/* --- DATA FORM --- */}
       <div className="p-4 bg-gray-850 rounded-xl shadow-xl border border-gray-750 relative overflow-hidden group">
@@ -224,6 +244,55 @@ const LabelEditor: React.FC<LabelEditorProps> = ({
                   className="w-full bg-gray-950 border border-gray-750 rounded p-2 text-center text-white"
               />
             </div>
+          </div>
+        </div>
+
+        {/* Notes Field */}
+        <div>
+          <label className="text-xs text-gray-400 uppercase font-bold tracking-wider mb-1 flex items-center gap-1.5">
+              <MessageSquare size={12} className="text-cyan-500" />
+              Notes / Print Tips
+              <button onClick={() => toggleField('notes')} className="text-gray-600 hover:text-cyan-400 ml-auto">
+                  {settings.visibleFields.notes ? <Eye size={12} /> : <EyeOff size={12} />}
+              </button>
+          </label>
+          <textarea 
+            value={data.notes || ''} 
+            onChange={(e) => handleChange('notes', e.target.value)}
+            placeholder="e.g., Print slower, needs enclosure, dried 4hrs..."
+            rows={2}
+            className="w-full bg-gray-950 border border-gray-750 rounded p-2 text-white text-sm focus:border-cyan-500 outline-none resize-none placeholder-gray-600"
+          />
+        </div>
+
+        {/* Open Date */}
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="text-xs text-gray-400 uppercase font-bold tracking-wider mb-1 flex items-center gap-1.5">
+                <CalendarPlus size={12} className="text-cyan-500" />
+                Open Date
+            </label>
+            <input 
+              type="date" 
+              value={data.openDate || ''} 
+              onChange={(e) => handleChange('openDate', e.target.value)}
+              className="w-full bg-gray-950 border border-gray-750 rounded p-2 text-white text-sm focus:border-cyan-500 outline-none"
+            />
+          </div>
+          <div>
+            <label className="text-xs text-gray-400 uppercase font-bold tracking-wider mb-1 flex items-center gap-1.5">
+                <Droplets size={12} className={`${data.hygroscopy === 'high' ? 'text-red-400' : data.hygroscopy === 'medium' ? 'text-yellow-400' : 'text-green-400'}`} />
+                Hygroscopy
+            </label>
+            <select 
+              value={data.hygroscopy || 'low'} 
+              onChange={(e) => handleChange('hygroscopy', e.target.value)}
+              className="w-full bg-gray-950 border border-gray-750 rounded p-2 text-white text-sm focus:border-cyan-500 outline-none"
+            >
+              <option value="low">Low (PLA)</option>
+              <option value="medium">Medium (PETG/ABS)</option>
+              <option value="high">High (Nylon/TPU)</option>
+            </select>
           </div>
         </div>
       </div>

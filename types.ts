@@ -16,7 +16,35 @@ export interface FilamentData {
   confidence?: number; // 0-100
   alternatives?: Array<{ brand: string; material: string; colorName: string }>;
   uuid?: string;
+  openDate?: string; // ISO date when spool was opened
+  purchaseDate?: string; // ISO date when purchased
+  remainingWeight?: string; // e.g. "750g" or "75%"
 }
+
+// Common material presets with typical print settings
+export interface MaterialPreset {
+  id: string;
+  material: string;
+  minTemp: number;
+  maxTemp: number;
+  bedTempMin: number;
+  bedTempMax: number;
+  hygroscopy: 'low' | 'medium' | 'high';
+  tips?: string;
+}
+
+export const MATERIAL_PRESETS: MaterialPreset[] = [
+  { id: 'pla', material: 'PLA', minTemp: 190, maxTemp: 220, bedTempMin: 50, bedTempMax: 60, hygroscopy: 'low', tips: 'Easy to print, biodegradable' },
+  { id: 'pla+', material: 'PLA+', minTemp: 200, maxTemp: 230, bedTempMin: 50, bedTempMax: 65, hygroscopy: 'low', tips: 'Stronger than standard PLA' },
+  { id: 'petg', material: 'PETG', minTemp: 220, maxTemp: 250, bedTempMin: 70, bedTempMax: 85, hygroscopy: 'medium', tips: 'Flexible, heat resistant. Use lower speed.' },
+  { id: 'abs', material: 'ABS', minTemp: 230, maxTemp: 260, bedTempMin: 95, bedTempMax: 110, hygroscopy: 'medium', tips: 'Enclosure recommended. Fumes!' },
+  { id: 'asa', material: 'ASA', minTemp: 240, maxTemp: 260, bedTempMin: 90, bedTempMax: 110, hygroscopy: 'medium', tips: 'UV resistant, outdoor use' },
+  { id: 'tpu', material: 'TPU', minTemp: 210, maxTemp: 240, bedTempMin: 30, bedTempMax: 60, hygroscopy: 'high', tips: 'Flexible. Disable retraction, slow speed.' },
+  { id: 'nylon', material: 'Nylon', minTemp: 240, maxTemp: 270, bedTempMin: 70, bedTempMax: 90, hygroscopy: 'high', tips: 'Must be dried! Very hygroscopic.' },
+  { id: 'pc', material: 'PC', minTemp: 260, maxTemp: 300, bedTempMin: 100, bedTempMax: 120, hygroscopy: 'high', tips: 'High temp, enclosure required' },
+  { id: 'cf-pla', material: 'CF-PLA', minTemp: 200, maxTemp: 230, bedTempMin: 50, bedTempMax: 60, hygroscopy: 'low', tips: 'Abrasive! Use hardened nozzle.' },
+  { id: 'silk', material: 'Silk PLA', minTemp: 190, maxTemp: 220, bedTempMin: 50, bedTempMax: 60, hygroscopy: 'low', tips: 'Shiny finish. Print slower for best results.' },
+];
 
 export enum LabelTheme {
   MODERN = 'modern',

@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Camera, Printer, RotateCcw, PenTool, Loader2, Info, Bluetooth, Ruler, History, ArrowRight, Battery, BatteryFull, BatteryLow, BatteryMedium, ExternalLink, AlertTriangle, Eye, X, Download, Upload, Image as ImageIcon, Edit3, CheckCircle2, Sparkles } from 'lucide-react';
+import { Camera, Printer, RotateCcw, PenTool, Loader2, Info, Bluetooth, Ruler, History, ArrowRight, Battery, BatteryFull, BatteryLow, BatteryMedium, ExternalLink, AlertTriangle, Eye, X, Download, Upload, Image as ImageIcon, Edit3, CheckCircle2, Sparkles, Package } from 'lucide-react';
 import { AppState, FilamentData, LABEL_PRESETS, LabelPreset, PrintSettings, HistoryEntry, LabelTheme, PrinterInfo } from './types';
 import { analyzeFilamentImage } from './services/geminiService';
 import { connectPrinter, printLabel, getBatteryLevel, getDeviceDetails, checkPrinterStatus } from './services/printerService';
@@ -11,6 +11,7 @@ import AnalysisView from './components/AnalysisView';
 import PrinterTools from './components/PrinterTools';
 import PrintStatus, { PrintStep } from './components/PrintStatus';
 import SuccessView from './components/SuccessView';
+import FilamentLibrary from './components/FilamentLibrary';
 
 const DEFAULT_DATA: FilamentData = {
   brand: 'GENERIC',
@@ -77,6 +78,12 @@ const App: React.FC = () => {
   const saveToHistory = (data: FilamentData) => {
     const newEntry: HistoryEntry = { id: Date.now().toString(), timestamp: Date.now(), data: data };
     const newHistory = [newEntry, ...history].slice(0, 20);
+    setHistory(newHistory);
+    localStorage.setItem('filament_history', JSON.stringify(newHistory));
+  };
+
+  const deleteFromHistory = (id: string) => {
+    const newHistory = history.filter(entry => entry.id !== id);
     setHistory(newHistory);
     localStorage.setItem('filament_history', JSON.stringify(newHistory));
   };
@@ -369,33 +376,14 @@ const App: React.FC = () => {
 
             </div>
 
+            {/* Filament Library */}
             {history.length > 0 && (
-              <div className="w-full space-y-4">
-                <div className="flex items-center gap-2 text-gray-500 px-2">
-                   <History size={16} />
-                   <h3 className="text-xs font-bold uppercase tracking-wider">Recent Scans</h3>
-                </div>
-                <div className="space-y-3">
-                  {history.slice(0, 3).map((entry) => (
-                    <button 
-                      key={entry.id}
-                      onClick={() => loadFromHistory(entry)}
-                      className="w-full bg-gray-900 hover:bg-gray-800 border border-gray-800 p-4 rounded-xl flex items-center justify-between transition-all group"
-                    >
-                      <div className="flex items-center gap-4">
-                        <div className="w-10 h-10 rounded-full bg-gray-800 flex items-center justify-center text-xs font-bold border border-gray-700 text-cyan-500">
-                          {entry.data.material.substring(0, 3)}
-                        </div>
-                        <div className="text-left">
-                          <div className="font-bold text-white">{entry.data.brand} {entry.data.material}</div>
-                          <div className="text-xs text-gray-500">{entry.data.colorName} • {entry.data.weight}</div>
-                        </div>
-                      </div>
-                      <ArrowRight size={18} className="text-gray-600 group-hover:text-cyan-400" />
-                    </button>
-                  ))}
-                </div>
-              </div>
+              <FilamentLibrary
+                history={history}
+                onSelect={loadFromHistory}
+                onDelete={deleteFromHistory}
+                maxDisplay={4}
+              />
             )}
             
             <div className="text-xs text-gray-600 flex items-center gap-2 pt-8">
