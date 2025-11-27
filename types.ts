@@ -100,28 +100,6 @@ export interface LabelPreset {
   name: string;
   widthMm: number;
   heightMm: number;
-  description: string;
-  group?: 'Standard' | 'D30/Small';
-}
-
-export const LABEL_PRESETS: LabelPreset[] = [
-  // D30 / D35 Series (Small Tapes)
-  { id: '12x40', name: '12x40mm', widthMm: 40, heightMm: 12, description: 'D30 Cable/Tag', group: 'D30/Small' },
-  { id: '14x30', name: '14x30mm', widthMm: 30, heightMm: 14, description: 'D30 Standard', group: 'D30/Small' },
-  { id: '14x50', name: '14x50mm', widthMm: 50, heightMm: 14, description: 'D30 Long', group: 'D30/Small' },
-  { id: '15x30', name: '15x30mm', widthMm: 30, heightMm: 15, description: 'D35 Standard', group: 'D30/Small' },
-
-  // M110 / M02 Series (Wider)
-  { id: '30x20', name: '30x20mm', widthMm: 30, heightMm: 20, description: 'Small / Jewelry', group: 'Standard' },
-  { id: '40x30', name: '40x30mm', widthMm: 40, heightMm: 30, description: 'Standard M110', group: 'Standard' },
-  { id: '50x30', name: '50x30mm', widthMm: 50, heightMm: 30, description: 'Wide Standard', group: 'Standard' },
-  { id: '50x50', name: '50x50mm', widthMm: 50, heightMm: 50, description: 'Square', group: 'Standard' },
-  { id: '50x70', name: '50x70mm', widthMm: 50, heightMm: 70, description: 'Large Vertical', group: 'Standard' },
-  { id: '50x80', name: '50x80mm', widthMm: 50, heightMm: 80, description: 'Mailing / Full', group: 'Standard' },
-];
-
-export interface PrinterDevice {
-  name: string;
   deviceId: string;
   gatt?: BluetoothRemoteGATTServer;
 }
