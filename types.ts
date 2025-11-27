@@ -69,6 +69,9 @@ export interface PrintSettings {
     date: boolean;
     source: boolean;
   };
+  speed?: 1 | 2 | 3 | 4 | 5;
+  labelType?: 'gap' | 'continuous' | 'mark';
+  autoCalibrate?: boolean;
 }
 
 export interface HistoryEntry {
@@ -107,7 +110,7 @@ export const LABEL_PRESETS: LabelPreset[] = [
   { id: '14x30', name: '14x30mm', widthMm: 30, heightMm: 14, description: 'D30 Standard', group: 'D30/Small' },
   { id: '14x50', name: '14x50mm', widthMm: 50, heightMm: 14, description: 'D30 Long', group: 'D30/Small' },
   { id: '15x30', name: '15x30mm', widthMm: 30, heightMm: 15, description: 'D35 Standard', group: 'D30/Small' },
-  
+
   // M110 / M02 Series (Wider)
   { id: '30x20', name: '30x20mm', widthMm: 30, heightMm: 20, description: 'Small / Jewelry', group: 'Standard' },
   { id: '40x30', name: '40x30mm', widthMm: 40, heightMm: 30, description: 'Standard M110', group: 'Standard' },
@@ -207,10 +210,113 @@ declare global {
   }
 
   interface BluetoothRemoteGATTDescriptor {
-      uuid: string;
-      characteristic: BluetoothRemoteGATTCharacteristic;
-      value?: DataView;
-      readValue(): Promise<DataView>;
-      writeValue(value: BufferSource): Promise<void>;
+    uuid: string;
+    characteristic: BluetoothRemoteGATTCharacteristic;
+    value?: DataView;
+    readValue(): Promise<DataView>;
+    writeValue(value: BufferSource): Promise<void>;
   }
+}
+
+// ===== D30 ADVANCED PRO FEATURES =====
+
+// Print Job Queue System
+export interface PrintJob {
+  id: string;
+  label: FilamentData;
+  settings: PrintSettings;
+  status: 'queued' | 'printing' | 'complete' | 'error';
+  progress: number;
+  estimatedTime: number;
+  createdAt: number;
+  error?: string;
+}
+
+// Label Template System
+export interface LabelTemplate {
+  id: string;
+  name: string;
+  description: string;
+  category: 'minimal' | 'detailed' | 'icon' | 'brand' | 'grid' | 'custom';
+  author: string;
+  layout: TemplateLayout;
+  previewUrl?: string;
+  supportedSizes: string[];
+  tags: string[];
+  isFavorite?: boolean;
+  createdAt: number;
+}
+
+export interface TemplateLayout {
+  elements: TemplateElement[];
+  backgroundColor: string;
+  borderStyle?: 'none' | 'solid' | 'dashed' | 'rounded';
+  borderWidth?: number;
+}
+
+export interface TemplateElement {
+  type: 'text' | 'qr' | 'icon' | 'divider' | 'colorSwatch' | 'barcode';
+  field?: keyof FilamentData | 'custom';
+  x: number;
+  y: number;
+  width?: number;
+  height?: number;
+  fontSize?: number;
+  fontWeight?: 'normal' | 'bold' | 'light';
+  align?: 'left' | 'center' | 'right';
+  color?: string;
+  customText?: string;
+  icon?: string;
+}
+
+// Printer Statistics & Analytics
+export interface PrinterStats {
+  totalPrints: number;
+  totalLabels: number;
+  totalInches: number;
+  batteryHealth: number;
+  printHeadWear: number;
+  lastMaintenance: number;
+  averageQuality: number;
+  firstPrintDate: number;
+  favoriteTemplate?: string;
+  mostPrintedMaterial?: string;
+}
+
+// Printer Calibration Data
+export interface CalibrationData {
+  labelWidthMm: number;
+  densityOffset: number;
+  speedOptimal: 1 | 2 | 3 | 4 | 5;
+  lastCalibrated: number;
+  calibratedBy: 'user' | 'auto';
+}
+
+// QR Code Configuration
+export interface QRCodeConfig {
+  type: 'url' | 'vcard' | 'custom';
+  data: string;
+  size: 'small' | 'medium' | 'large';
+  errorCorrection: 'L' | 'M' | 'Q' | 'H';
+  includeInventoryLink: boolean;
+  customSchema?: string;
+}
+
+// Batch Print Configuration
+export interface BatchPrintConfig {
+  jobs: PrintJob[];
+  optimizeOrder: boolean;
+  pauseBetweenJobs: number;
+  continueOnError: boolean;
+  totalEstimatedTime: number;
+}
+
+// Maintenance Log Entry
+export interface MaintenanceLog {
+  id: string;
+  type: 'calibration' | 'cleaning' | 'test' | 'battery';
+  timestamp: number;
+  notes?: string;
+  result: 'success' | 'warning' | 'error';
+  details?: any;
 }

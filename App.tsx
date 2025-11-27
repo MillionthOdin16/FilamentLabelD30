@@ -1,7 +1,6 @@
-
 import React, { useState, useEffect, useRef } from 'react';
-import { Camera, Printer, RotateCcw, PenTool, Loader2, Info, Bluetooth, Ruler, History, ArrowRight, Battery, BatteryFull, BatteryLow, BatteryMedium, ExternalLink, AlertTriangle, Eye, X, Download, Upload, Image as ImageIcon, Edit3, CheckCircle2, Sparkles, Package } from 'lucide-react';
-import { AppState, FilamentData, LABEL_PRESETS, LabelPreset, PrintSettings, HistoryEntry, LabelTheme, PrinterInfo } from './types';
+import { Camera, Printer, RotateCcw, PenTool, Loader2, Info, Bluetooth, Ruler, History, ArrowRight, Battery, BatteryFull, BatteryLow, BatteryMedium, ExternalLink, AlertTriangle, Eye, X, Download, Upload, Image as ImageIcon, Edit3, CheckCircle2, Sparkles, Package, Layout, BarChart3, Layers } from 'lucide-react';
+import { AppState, FilamentData, LABEL_PRESETS, LabelPreset, PrintSettings, HistoryEntry, LabelTheme, PrinterInfo, PrintJob, LabelTemplate } from './types';
 import { analyzeFilamentImage } from './services/geminiService';
 import { connectPrinter, printLabel, getBatteryLevel, getDeviceDetails, checkPrinterStatus } from './services/printerService';
 import CameraCapture from './components/CameraCapture';
@@ -12,6 +11,9 @@ import PrinterTools from './components/PrinterTools';
 import PrintStatus, { PrintStep } from './components/PrintStatus';
 import SuccessView from './components/SuccessView';
 import FilamentLibrary from './components/FilamentLibrary';
+import BatchGenerator from './components/BatchGenerator';
+import AnalyticsDashboard from './components/AnalyticsDashboard';
+import TemplateGallery from './components/TemplateGallery';
 
 const DEFAULT_DATA: FilamentData = {
   brand: 'GENERIC',
@@ -35,11 +37,16 @@ const DEFAULT_SETTINGS: PrintSettings = {
   density: 50,
   theme: LabelTheme.SWATCH,
   marginMm: 2,
-  visibleFields: { brand: true, weight: true, notes: true, date: false, source: false }
+  visibleFields: { brand: true, weight: true, notes: true, date: false, source: false },
+  speed: 3,
+  labelType: 'gap'
 };
+
+type Tab = 'editor' | 'batch' | 'templates' | 'analytics';
 
 const App: React.FC = () => {
   const [state, setState] = useState<AppState>(AppState.HOME);
+  const [activeTab, setActiveTab] = useState<Tab>('editor');
   const [filamentData, setFilamentData] = useState<FilamentData>(DEFAULT_DATA);
   const [printSettings, setPrintSettings] = useState<PrintSettings>(DEFAULT_SETTINGS);
   const [selectedLabel, setSelectedLabel] = useState<LabelPreset>(LABEL_PRESETS[0]); // Default to 12x40mm (Index 0)
@@ -55,6 +62,12 @@ const App: React.FC = () => {
   const [isIframe, setIsIframe] = useState(false);
   const [showIframeWarning, setShowIframeWarning] = useState(true);
   const [showSuccess, setShowSuccess] = useState(false);
+
+  // Batch Printing State
+  const [batchQueue, setBatchQueue] = useState<PrintJob[]>([]);
+  const [currentBatchIndex, setCurrentBatchIndex] = useState<number>(-1);
+  const [batchCanvas, setBatchCanvas] = useState<HTMLCanvasElement | null>(null);
+  const [isBatchPrinting, setIsBatchPrinting] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -77,7 +90,7 @@ const App: React.FC = () => {
 
   const saveToHistory = (data: FilamentData) => {
     const newEntry: HistoryEntry = { id: Date.now().toString(), timestamp: Date.now(), data: data };
-    const newHistory = [newEntry, ...history].slice(0, 20);
+    const newHistory = [newEntry, ...history].slice(0, 50); // Keep last 50
     setHistory(newHistory);
     localStorage.setItem('filament_history', JSON.stringify(newHistory));
   };
@@ -91,6 +104,7 @@ const App: React.FC = () => {
   const loadFromHistory = (entry: HistoryEntry) => {
     setFilamentData({ ...entry.data, source: 'History Record', referenceUrl: undefined });
     setState(AppState.EDITING);
+    setActiveTab('editor');
   };
 
   const handleStartCapture = () => { setState(AppState.CAMERA); setErrorMsg(null); };
@@ -104,7 +118,6 @@ const App: React.FC = () => {
         handleImageCaptured(result);
       };
       reader.readAsDataURL(file);
-      // Reset input so same file can be selected again
       event.target.value = '';
     }
   };
@@ -125,7 +138,7 @@ const App: React.FC = () => {
     const minWaitPromise = new Promise(resolve => setTimeout(resolve, 3500));
     try {
       const [data, _] = await Promise.all([analyzeFilamentImage(imageSrc), minWaitPromise]);
-      const enrichedData = { ...data, source: data.source || 'Gemini 2.5 Flash' }; 
+      const enrichedData = { ...data, source: data.source || 'Gemini 2.5 Flash' };
       setFilamentData(enrichedData);
       saveToHistory(enrichedData);
       setState(AppState.EDITING);
@@ -133,7 +146,7 @@ const App: React.FC = () => {
       await minWaitPromise;
       setErrorMsg("Could not analyze image automatically. Please enter details manually.");
       setFilamentData(DEFAULT_DATA);
-      setState(AppState.EDITING); 
+      setState(AppState.EDITING);
     }
   };
 
@@ -148,85 +161,182 @@ const App: React.FC = () => {
 
   const handlePrint = async () => {
     if (!previewCanvas) return;
+    performPrint(previewCanvas, printSettings);
+  };
+
+  const performPrint = async (canvas: HTMLCanvasElement, settings: PrintSettings, isBatchItem = false) => {
     setIsProcessing(true);
-    setPrintStep('connecting');
-    setStatusMsg('Searching for printer...');
-    setErrorMsg(null);
-    setShowSuccess(false);
-    
+    if (!isBatchItem) {
+      setPrintStep('connecting');
+      setStatusMsg('Searching for printer...');
+      setErrorMsg(null);
+      setShowSuccess(false);
+    }
+
     try {
       const device = await connectPrinter();
-      
-      // Fetch details immediately
-      setPrintStep('fetching');
-      setStatusMsg('Reading device information...');
-      const [battery, details] = await Promise.all([
+
+      // Only fetch details if we don't have them or it's the first print
+      if (!printerInfo || !isBatchItem) {
+        if (!isBatchItem) {
+          setPrintStep('fetching');
+          setStatusMsg('Reading device information...');
+        }
+        const [battery, details] = await Promise.all([
           getBatteryLevel(device),
           getDeviceDetails(device)
-      ]);
-      
-      if (battery !== null) setBatteryLevel(battery);
-      if (details) setPrinterInfo(details);
-
-      setPrintStep('checking');
-      setStatusMsg('Verifying printer status...');
-      const status = await checkPrinterStatus(device);
-      if (status === 'paper_out') throw new Error("Printer reports: Out of Paper");
-      if (status === 'cover_open') throw new Error("Printer reports: Cover Open");
-
-      setPrintStep('printing');
-      setStatusMsg(printSettings.copies > 1 
-        ? `Sending ${printSettings.copies} labels to printer...`
-        : 'Sending label to printer...'
-      );
-      await printLabel(device, previewCanvas, printSettings);
-      
-      setPrintStep('success');
-      setStatusMsg('Print complete!');
-      setShowSuccess(true);
-      setState(AppState.PRINTING_SUCCESS);
-      
-      // Save if new
-      if (history.length === 0 || JSON.stringify(history[0].data) !== JSON.stringify(filamentData)) {
-         saveToHistory(filamentData);
+        ]);
+        if (battery !== null) setBatteryLevel(battery);
+        if (details) setPrinterInfo(details);
       }
-      
-      // Reset print step after delay
-      setTimeout(() => {
-        setPrintStep('idle');
-        setStatusMsg('');
-      }, 3000);
-      
+
+      if (!isBatchItem) {
+        setPrintStep('checking');
+        setStatusMsg('Verifying printer status...');
+        const status = await checkPrinterStatus(device);
+        if (status === 'paper_out') throw new Error("Printer reports: Out of Paper");
+        if (status === 'cover_open') throw new Error("Printer reports: Cover Open");
+      }
+
+      if (!isBatchItem) {
+        setPrintStep('printing');
+        setStatusMsg(settings.copies > 1
+          ? `Sending ${settings.copies} labels to printer...`
+          : 'Sending label to printer...'
+        );
+      }
+
+      await printLabel(device, canvas, settings);
+
+      if (!isBatchItem) {
+        setPrintStep('success');
+        setStatusMsg('Print complete!');
+        setShowSuccess(true);
+        setState(AppState.PRINTING_SUCCESS);
+
+        // Save if new and in editor mode
+        if (activeTab === 'editor') {
+          if (history.length === 0 || JSON.stringify(history[0].data) !== JSON.stringify(filamentData)) {
+            saveToHistory(filamentData);
+          }
+        }
+
+        setTimeout(() => {
+          setPrintStep('idle');
+          setStatusMsg('');
+        }, 3000);
+      }
+
     } catch (err: any) {
       console.error("Print Error:", err);
-      setPrintStep('error');
-      
-      // Catch Permissions Policy / Security Errors
+      if (!isBatchItem) setPrintStep('error');
+
       const msg = err.message?.toLowerCase() || '';
-      const isSecurityError = err.name === 'SecurityError' || 
-                             msg.includes('permissions policy') || 
-                             msg.includes('disallowed') ||
-                             msg.includes('bluetooth');
+      const isSecurityError = err.name === 'SecurityError' ||
+        msg.includes('permissions policy') ||
+        msg.includes('disallowed') ||
+        msg.includes('bluetooth');
 
       if (isSecurityError) {
         setErrorMsg("BLOCKED: Bluetooth access is restricted in this view. You must open the app in a new tab to print.");
         setStatusMsg("Bluetooth blocked by browser");
       } else if (err.name === 'NotFoundError') {
-        setPrintStep('idle');
-        setStatusMsg('');
+        if (!isBatchItem) {
+          setPrintStep('idle');
+          setStatusMsg('');
+        }
       } else {
         setErrorMsg(err.message || "Printing failed. Check connection.");
         setStatusMsg(err.message || "Print failed");
+        // Re-throw for batch handler
+        if (isBatchItem) throw err;
       }
     } finally {
       setIsProcessing(false);
     }
   };
 
+  // Batch Processing Effect
+  useEffect(() => {
+    const processBatchItem = async () => {
+      // We need both the index to be valid AND the canvas to be ready (not null)
+      // We also check if we are actually in batch printing mode
+      if (isBatchPrinting && currentBatchIndex >= 0 && currentBatchIndex < batchQueue.length && batchCanvas) {
+
+        const job = batchQueue[currentBatchIndex];
+
+        // Small delay to ensure canvas is painted
+        await new Promise(r => setTimeout(r, 500));
+
+        try {
+          // Update status for the user
+          setPrintStep('printing');
+          setStatusMsg(`Printing ${currentBatchIndex + 1}/${batchQueue.length}: ${job.data.brand} ${job.data.material}`);
+
+          // Print!
+          await performPrint(batchCanvas, job.settings, true);
+
+          // Move to next or finish
+          if (currentBatchIndex < batchQueue.length - 1) {
+            // Reset canvas to force a re-render for the next item
+            setBatchCanvas(null);
+            setCurrentBatchIndex(prev => prev + 1);
+          } else {
+            // Done
+            setIsBatchPrinting(false);
+            setPrintStep('success');
+            setStatusMsg('Batch Complete!');
+            setShowSuccess(true);
+            setBatchQueue([]);
+            setCurrentBatchIndex(-1);
+          }
+        } catch (e: any) {
+          console.error("Batch failed", e);
+          setIsBatchPrinting(false);
+          setErrorMsg(`Batch failed at item ${currentBatchIndex + 1}: ${e.message}`);
+          setPrintStep('error');
+        }
+      }
+    };
+
+    processBatchItem();
+  }, [currentBatchIndex, batchCanvas, isBatchPrinting, batchQueue]);
+
+  const handleBatchPrint = async (jobs: PrintJob[]) => {
+    if (jobs.length === 0) return;
+    setBatchQueue(jobs);
+    setCurrentBatchIndex(0);
+    setIsBatchPrinting(true);
+    setPrintStep('connecting'); // Initial status
+    setStatusMsg('Starting batch print...');
+  };
+
+  const handleSelectTemplate = (template: LabelTemplate) => {
+    const newSettings = { ...printSettings };
+
+    // Map template category/tags to themes
+    if (template.category === 'minimal') newSettings.theme = LabelTheme.MINIMAL;
+    else if (template.category === 'detailed') newSettings.theme = LabelTheme.TECHNICAL;
+    else if (template.category === 'brand') newSettings.theme = LabelTheme.BOLD;
+    else if (template.category === 'grid') newSettings.theme = LabelTheme.MODERN;
+    else if (template.tags.includes('maintenance')) newSettings.theme = LabelTheme.MAINTENANCE;
+    else newSettings.theme = LabelTheme.SWATCH;
+
+    setPrintSettings(newSettings);
+    setActiveTab('editor');
+
+    // Show a temporary success message
+    setPrintStep('success');
+    setStatusMsg(`Applied template: ${template.name}`);
+    setTimeout(() => {
+      setPrintStep('idle');
+      setStatusMsg('');
+    }, 2000);
+  };
+
   const handlePrintMore = () => {
     setShowSuccess(false);
     setPrintStep('idle');
-    // Stay in editing state, user can adjust copies and print again
   };
 
   const resetFlow = () => {
@@ -240,33 +350,26 @@ const App: React.FC = () => {
     setBatteryLevel(null);
     setPrinterInfo(null);
     setCapturedImage(null);
+    setActiveTab('editor');
   };
 
   const renderBattery = () => {
-      if (batteryLevel === null) return null;
-      let Icon = Battery;
-      let color = 'text-gray-400';
-      if (batteryLevel > 75) { Icon = BatteryFull; color = 'text-green-400'; }
-      else if (batteryLevel > 30) { Icon = BatteryMedium; color = 'text-yellow-400'; }
-      else { Icon = BatteryLow; color = 'text-red-400'; }
-      return (
-          <div className={`flex items-center gap-1 ${color} text-xs font-mono border border-gray-700 px-2 py-1 rounded bg-gray-800`}>
-              <Icon size={14} /> <span>{batteryLevel}%</span>
-          </div>
-      );
+    if (batteryLevel === null) return null;
+    let Icon = Battery;
+    let color = 'text-gray-400';
+    if (batteryLevel > 75) { Icon = BatteryFull; color = 'text-green-400'; }
+    else if (batteryLevel > 30) { Icon = BatteryMedium; color = 'text-yellow-400'; }
+    else { Icon = BatteryLow; color = 'text-red-400'; }
+    return (
+      <div className={`flex items-center gap-1 ${color} text-xs font-mono border border-gray-700 px-2 py-1 rounded bg-gray-800`}>
+        <Icon size={14} /> <span>{batteryLevel}%</span>
+      </div>
+    );
   };
 
   const isHttp = typeof window !== 'undefined' && (window.location.protocol === 'http:' || window.location.protocol === 'https:');
 
-  // Helper to scroll to selected label
   const labelListRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-     if (labelListRef.current && state === AppState.EDITING) {
-         // Optionally scroll selected into view
-         // const selectedEl = document.getElementById(`label-${selectedLabel.id}`);
-         // selectedEl?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
-     }
-  }, [selectedLabel, state]);
 
   return (
     <div className="min-h-screen bg-gray-950 text-gray-100 font-sans selection:bg-cyan-500/30">
@@ -278,24 +381,52 @@ const App: React.FC = () => {
           <div>
             <h1 className="text-xl font-bold tracking-tight leading-none">Filament ID</h1>
             <div className="flex items-center gap-1">
-                 <p className="text-[10px] text-gray-500 font-mono">PRO LABELER</p>
-                 {printerInfo?.model && (
-                    <span className="text-[9px] bg-cyan-900/40 text-cyan-400 px-1 rounded border border-cyan-800/50">
-                        {printerInfo.model}
-                    </span>
-                 )}
+              <p className="text-[10px] text-gray-500 font-mono">PRO LABELER</p>
+              {printerInfo?.model && (
+                <span className="text-[9px] bg-cyan-900/40 text-cyan-400 px-1 rounded border border-cyan-800/50">
+                  {printerInfo.model}
+                </span>
+              )}
             </div>
           </div>
         </div>
         <div className="flex items-center gap-2">
-            {renderBattery()}
-            {state !== AppState.HOME && (
+          {renderBattery()}
+          {state !== AppState.HOME && (
             <button onClick={resetFlow} className="p-2 bg-gray-800 hover:bg-gray-700 rounded-full transition-colors text-gray-400 hover:text-white">
-                <RotateCcw size={20} />
+              <RotateCcw size={20} />
             </button>
-            )}
+          )}
         </div>
       </header>
+
+      {/* Tab Navigation */}
+      {state !== AppState.HOME && state !== AppState.CAMERA && state !== AppState.ANALYZING && (
+        <div className="sticky top-[88px] z-30 bg-gray-950 border-b border-gray-800 px-4">
+          <div className="flex gap-4 overflow-x-auto no-scrollbar max-w-xl mx-auto">
+            {[
+              { id: 'editor', label: 'Editor', icon: Edit3 },
+              { id: 'batch', label: 'Batch', icon: Layers },
+              { id: 'templates', label: 'Templates', icon: Layout },
+              { id: 'analytics', label: 'Analytics', icon: BarChart3 },
+            ].map(tab => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id as Tab)}
+                className={`
+                              flex items-center gap-2 py-3 px-1 border-b-2 transition-colors whitespace-nowrap
+                              ${activeTab === tab.id
+                    ? 'border-cyan-500 text-cyan-400'
+                    : 'border-transparent text-gray-500 hover:text-gray-300'}
+                          `}
+              >
+                <tab.icon size={16} />
+                <span className="text-xs font-bold uppercase tracking-wider">{tab.label}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       <main className="max-w-xl mx-auto p-6 pb-40">
         {/* Iframe Warning */}
@@ -308,7 +439,7 @@ const App: React.FC = () => {
                 Bluetooth printing requires a full window. If printing fails, try opening the app directly.
               </p>
               {isHttp && (
-                <a 
+                <a
                   href={window.location.href}
                   target="_blank"
                   rel="noreferrer"
@@ -318,11 +449,11 @@ const App: React.FC = () => {
                 </a>
               )}
             </div>
-            <button 
-                onClick={() => setShowIframeWarning(false)} 
-                className="text-yellow-700 hover:text-yellow-500 p-1 rounded transition-colors"
+            <button
+              onClick={() => setShowIframeWarning(false)}
+              className="text-yellow-700 hover:text-yellow-500 p-1 rounded transition-colors"
             >
-                <X size={16} /> 
+              <X size={16} />
             </button>
           </div>
         )}
@@ -331,47 +462,47 @@ const App: React.FC = () => {
           <div className="flex flex-col items-center space-y-12 mt-4 animate-fade-in">
             <div className="text-center space-y-6">
               <h2 className="text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-white via-gray-200 to-gray-500 tracking-tight">
-                Scan.<br/>Label.<br/>Print.
+                Scan.<br />Label.<br />Print.
               </h2>
               <p className="text-gray-400 max-w-xs mx-auto text-lg">
                 The ultimate AI-powered labeling tool for your 3D printing filament.
               </p>
-              
-              <div className="flex gap-4 items-center justify-center w-full">
-                  <button 
-                    onClick={handleStartCapture}
-                    className="group relative flex items-center justify-center w-48 h-48 rounded-3xl bg-gray-900 border border-gray-800 hover:border-cyan-500/50 transition-all duration-300 shadow-2xl hover:shadow-cyan-900/20"
-                  >
-                    <div className="absolute inset-0 rounded-3xl bg-cyan-500/5 group-hover:bg-cyan-500/10 transition-all blur-xl"></div>
-                    <div className="flex flex-col items-center space-y-3 relative z-10">
-                      <Camera size={40} className="text-cyan-400 group-hover:scale-110 transition-transform duration-300" />
-                      <span className="font-bold tracking-widest text-xs text-gray-300 group-hover:text-white">CAMERA</span>
-                    </div>
-                  </button>
 
-                  <div className="flex flex-col items-center justify-center gap-2">
-                      <input 
-                         type="file" 
-                         ref={fileInputRef} 
-                         accept="image/*" 
-                         className="hidden" 
-                         onChange={handleFileUpload}
-                      />
-                      <button 
-                        onClick={triggerFileUpload}
-                        className="group w-24 h-24 rounded-2xl bg-gray-900 border border-gray-800 hover:border-gray-600 transition-all duration-300 flex flex-col items-center justify-center gap-2"
-                      >
-                         <ImageIcon size={24} className="text-gray-500 group-hover:text-cyan-400 transition-colors" />
-                         <span className="text-[10px] font-bold text-gray-500 uppercase">Gallery</span>
-                      </button>
-                      <button 
-                        onClick={handleManualEntry}
-                        className="group w-24 h-16 rounded-2xl bg-gray-900 border border-gray-800 hover:border-cyan-600 transition-all duration-300 flex flex-col items-center justify-center gap-1"
-                      >
-                         <Edit3 size={18} className="text-gray-500 group-hover:text-cyan-400 transition-colors" />
-                         <span className="text-[10px] font-bold text-gray-500 group-hover:text-cyan-400 uppercase">Manual</span>
-                      </button>
+              <div className="flex gap-4 items-center justify-center w-full">
+                <button
+                  onClick={handleStartCapture}
+                  className="group relative flex items-center justify-center w-48 h-48 rounded-3xl bg-gray-900 border border-gray-800 hover:border-cyan-500/50 transition-all duration-300 shadow-2xl hover:shadow-cyan-900/20"
+                >
+                  <div className="absolute inset-0 rounded-3xl bg-cyan-500/5 group-hover:bg-cyan-500/10 transition-all blur-xl"></div>
+                  <div className="flex flex-col items-center space-y-3 relative z-10">
+                    <Camera size={40} className="text-cyan-400 group-hover:scale-110 transition-transform duration-300" />
+                    <span className="font-bold tracking-widest text-xs text-gray-300 group-hover:text-white">CAMERA</span>
                   </div>
+                </button>
+
+                <div className="flex flex-col items-center justify-center gap-2">
+                  <input
+                    type="file"
+                    ref={fileInputRef}
+                    accept="image/*"
+                    className="hidden"
+                    onChange={handleFileUpload}
+                  />
+                  <button
+                    onClick={triggerFileUpload}
+                    className="group w-24 h-24 rounded-2xl bg-gray-900 border border-gray-800 hover:border-gray-600 transition-all duration-300 flex flex-col items-center justify-center gap-2"
+                  >
+                    <ImageIcon size={24} className="text-gray-500 group-hover:text-cyan-400 transition-colors" />
+                    <span className="text-[10px] font-bold text-gray-500 uppercase">Gallery</span>
+                  </button>
+                  <button
+                    onClick={handleManualEntry}
+                    className="group w-24 h-16 rounded-2xl bg-gray-900 border border-gray-800 hover:border-cyan-600 transition-all duration-300 flex flex-col items-center justify-center gap-1"
+                  >
+                    <Edit3 size={18} className="text-gray-500 group-hover:text-cyan-400 transition-colors" />
+                    <span className="text-[10px] font-bold text-gray-500 group-hover:text-cyan-400 uppercase">Manual</span>
+                  </button>
+                </div>
               </div>
 
             </div>
@@ -385,10 +516,10 @@ const App: React.FC = () => {
                 maxDisplay={4}
               />
             )}
-            
+
             <div className="text-xs text-gray-600 flex items-center gap-2 pt-8">
-               <Bluetooth size={14} /> 
-               <span>Supports Phomemo M110, M02, D30, Q30</span>
+              <Bluetooth size={14} />
+              <span>Supports Phomemo M110, M02, D30, Q30</span>
             </div>
           </div>
         )}
@@ -398,76 +529,92 @@ const App: React.FC = () => {
 
         {(state === AppState.EDITING || state === AppState.PRINTING_SUCCESS) && (
           <div className="space-y-6 animate-fade-in-up relative">
-            
-            {/* --- LIVE PREVIEW SECTION (First & Sticky) --- */}
-            <section className="sticky top-[88px] z-30 -mx-6 px-6 py-4 bg-gray-950/80 backdrop-blur-md border-b border-gray-800 shadow-2xl flex flex-col items-center gap-2">
-                 <div className="flex items-center gap-2 text-cyan-400 absolute top-2 left-6 opacity-80">
-                    <Eye size={14} />
-                    <span className="text-[10px] font-bold uppercase tracking-wider">Live Proof</span>
-                 </div>
-                 
-                 <div className="p-1 bg-white rounded shadow-2xl mt-4 max-w-full">
-                   <LabelCanvas 
+
+            {/* --- EDITOR TAB --- */}
+            {activeTab === 'editor' && (
+              <>
+                {/* --- LIVE PREVIEW SECTION (First & Sticky) --- */}
+                <section className="flex flex-col items-center gap-2">
+                  <div className="p-1 bg-white rounded shadow-2xl mt-4 max-w-full">
+                    <LabelCanvas
                       data={filamentData} settings={printSettings} widthMm={selectedLabel.widthMm} heightMm={selectedLabel.heightMm}
                       onCanvasReady={setPreviewCanvas} scale={0.7}
-                   />
-                 </div>
-                 
-                 <div className="text-[10px] text-gray-500 font-mono mt-1">
-                   {selectedLabel.widthMm}x{selectedLabel.heightMm}mm • {printSettings.theme}
-                 </div>
-            </section>
+                    />
+                  </div>
 
-            {/* --- LABEL SIZE SELECTOR --- */}
-            <section className="pt-2">
-                <div className="flex items-center gap-2 mb-3 text-gray-400 px-1">
+                  <div className="text-[10px] text-gray-500 font-mono mt-1">
+                    {selectedLabel.widthMm}x{selectedLabel.heightMm}mm • {printSettings.theme}
+                  </div>
+                </section>
+
+                {/* --- LABEL SIZE SELECTOR --- */}
+                <section className="pt-2">
+                  <div className="flex items-center gap-2 mb-3 text-gray-400 px-1">
                     <Ruler size={16} />
                     <h3 className="text-xs font-bold uppercase tracking-wider">Layout Size</h3>
-                </div>
-                <div ref={labelListRef} className="flex gap-3 overflow-x-auto pb-4 no-scrollbar snap-x">
-                {LABEL_PRESETS.map((preset) => (
-                  <button
-                    id={`label-${preset.id}`}
-                    key={preset.id}
-                    onClick={() => setSelectedLabel(preset)}
-                    className={`
-                      flex-shrink-0 snap-center w-28 p-2 rounded-xl border transition-all duration-200
-                      flex flex-col items-center gap-2
-                      ${selectedLabel.id === preset.id 
-                        ? 'bg-cyan-500/10 border-cyan-500 shadow-lg shadow-cyan-900/20' 
-                        : 'bg-gray-900 border-gray-800 text-gray-400 hover:bg-gray-800/80'}
-                    `}
-                  >
-                    <div className={`border-2 rounded-sm transition-all ${selectedLabel.id === preset.id ? 'border-cyan-400 bg-cyan-400/20' : 'border-gray-600'}`}
-                    style={{ width: `${preset.widthMm / 1.8}px`, height: `${preset.heightMm / 1.8}px` }}></div>
-                    <div className="text-center leading-tight">
-                      <div className={`text-xs font-bold ${selectedLabel.id === preset.id ? 'text-white' : ''}`}>{preset.name}</div>
-                      <div className={`text-[9px] opacity-70 scale-90 ${preset.group === 'D30/Small' ? 'text-cyan-200' : ''}`}>
-                         {preset.description}
-                      </div>
-                    </div>
-                  </button>
-                ))}
-              </div>
-            </section>
+                  </div>
+                  <div ref={labelListRef} className="flex gap-3 overflow-x-auto pb-4 no-scrollbar snap-x">
+                    {LABEL_PRESETS.map((preset) => (
+                      <button
+                        id={`label-${preset.id}`}
+                        key={preset.id}
+                        onClick={() => setSelectedLabel(preset)}
+                        className={`
+                            flex-shrink-0 snap-center w-28 p-2 rounded-xl border transition-all duration-200
+                            flex flex-col items-center gap-2
+                            ${selectedLabel.id === preset.id
+                            ? 'bg-cyan-500/10 border-cyan-500 shadow-lg shadow-cyan-900/20'
+                            : 'bg-gray-900 border-gray-800 text-gray-400 hover:bg-gray-800/80'}
+                            `}
+                      >
+                        <div className={`border-2 rounded-sm transition-all ${selectedLabel.id === preset.id ? 'border-cyan-400 bg-cyan-400/20' : 'border-gray-600'}`}
+                          style={{ width: `${preset.widthMm / 1.8}px`, height: `${preset.heightMm / 1.8}px` }}></div>
+                        <div className="text-center leading-tight">
+                          <div className={`text-xs font-bold ${selectedLabel.id === preset.id ? 'text-white' : ''}`}>{preset.name}</div>
+                          <div className={`text-[9px] opacity-70 scale-90 ${preset.group === 'D30/Small' ? 'text-cyan-200' : ''}`}>
+                            {preset.description}
+                          </div>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </section>
 
-            {/* --- DATA & SETTINGS EDITOR --- */}
-            <section>
-              <div className="flex items-center gap-2 mb-3 text-cyan-400 px-1">
-                 <PenTool size={16} />
-                 <h3 className="text-xs font-bold uppercase tracking-wider">Customize</h3>
-              </div>
-              <LabelEditor 
-                data={filamentData} 
-                settings={printSettings}
-                onChange={setFilamentData}
-                onSettingsChange={setPrintSettings}
-                onConfirm={() => {}}
-                onDownload={handleDownloadPng}
-              />
-            </section>
-            
-            <PrinterTools />
+                {/* --- DATA & SETTINGS EDITOR --- */}
+                <section>
+                  <div className="flex items-center gap-2 mb-3 text-cyan-400 px-1">
+                    <PenTool size={16} />
+                    <h3 className="text-xs font-bold uppercase tracking-wider">Customize</h3>
+                  </div>
+                  <LabelEditor
+                    data={filamentData}
+                    settings={printSettings}
+                    onChange={setFilamentData}
+                    onSettingsChange={setPrintSettings}
+                    onConfirm={() => { }}
+                    onDownload={handleDownloadPng}
+                  />
+                </section>
+
+                <PrinterTools settings={printSettings} onSettingsChange={setPrintSettings} />
+              </>
+            )}
+
+            {/* --- BATCH TAB --- */}
+            {activeTab === 'batch' && (
+              <BatchGenerator history={history} onPrintBatch={handleBatchPrint} />
+            )}
+
+            {/* --- TEMPLATES TAB --- */}
+            {activeTab === 'templates' && (
+              <TemplateGallery onSelectTemplate={handleSelectTemplate} />
+            )}
+
+            {/* --- ANALYTICS TAB --- */}
+            {activeTab === 'analytics' && (
+              <AnalyticsDashboard history={history} />
+            )}
+
           </div>
         )}
 
@@ -483,7 +630,7 @@ const App: React.FC = () => {
         )}
       </main>
 
-      {(state === AppState.EDITING || state === AppState.PRINTING_SUCCESS) && !showSuccess && (
+      {(state === AppState.EDITING || state === AppState.PRINTING_SUCCESS) && !showSuccess && activeTab === 'editor' && (
         <div className="fixed bottom-0 left-0 w-full p-6 bg-gradient-to-t from-gray-950 via-gray-950 to-transparent pointer-events-none z-50">
           <div className="max-w-xl mx-auto pointer-events-auto space-y-4">
             {/* Print Status Indicator */}
@@ -499,14 +646,14 @@ const App: React.FC = () => {
             {errorMsg && printStep === 'error' && (
               <div className="bg-red-500/10 border border-red-500/50 text-red-200 p-4 rounded-xl text-sm flex flex-col gap-2 backdrop-blur-md shadow-lg shadow-red-900/20 animate-fade-in-scale">
                 <div className="flex items-center gap-2 font-bold">
-                   <AlertTriangle size={18} className="shrink-0" />
-                   <span>Print Error</span>
+                  <AlertTriangle size={18} className="shrink-0" />
+                  <span>Print Error</span>
                 </div>
                 <p className="text-red-200/80 leading-relaxed text-xs">
                   {errorMsg}
                 </p>
                 {(errorMsg.includes("BLOCKED") || errorMsg.includes("new tab")) && isHttp && (
-                  <a 
+                  <a
                     href={window.location.href}
                     target="_blank"
                     rel="noreferrer"
@@ -515,7 +662,7 @@ const App: React.FC = () => {
                     Open in New Tab <ExternalLink size={14} />
                   </a>
                 )}
-                <button 
+                <button
                   onClick={() => { setErrorMsg(null); setPrintStep('idle'); }}
                   className="mt-1 text-red-400 hover:text-red-300 text-xs font-bold self-end"
                 >
@@ -533,8 +680,8 @@ const App: React.FC = () => {
                   ${isProcessing ? 'bg-gray-800 text-gray-500 cursor-not-allowed' : 'bg-gradient-to-r from-cyan-500 to-blue-600 text-white hover:from-cyan-400 hover:to-blue-500'}
                 `}
               >
-                <Printer size={24} /> 
-                PRINT LABEL 
+                <Printer size={24} />
+                PRINT LABEL
                 {printSettings.copies > 1 && (
                   <span className="bg-white/20 px-2 py-0.5 rounded-full text-sm">×{printSettings.copies}</span>
                 )}
@@ -543,6 +690,58 @@ const App: React.FC = () => {
           </div>
         </div>
       )}
+      {/* Batch Progress Modal */}
+      {isBatchPrinting && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-gray-900 border border-gray-700 p-8 rounded-2xl shadow-2xl max-w-sm w-full text-center space-y-6">
+            <div className="w-16 h-16 mx-auto bg-cyan-900/30 rounded-full flex items-center justify-center animate-pulse">
+              <Printer size={32} className="text-cyan-400" />
+            </div>
+            <div>
+              <h3 className="text-xl font-bold text-white">Printing Batch...</h3>
+              <p className="text-gray-400 text-sm mt-1">
+                Label {currentBatchIndex + 1} of {batchQueue.length}
+              </p>
+            </div>
+
+            {/* Progress Bar */}
+            <div className="w-full bg-gray-800 rounded-full h-2 overflow-hidden">
+              <div
+                className="bg-cyan-500 h-full transition-all duration-500 ease-out"
+                style={{ width: `${((currentBatchIndex) / batchQueue.length) * 100}%` }}
+              ></div>
+            </div>
+
+            <div className="bg-gray-800/50 p-4 rounded-lg text-left">
+              <p className="text-xs text-gray-500 uppercase font-bold mb-1">Current Label</p>
+              <p className="text-white font-bold">{batchQueue[currentBatchIndex]?.data.brand}</p>
+              <p className="text-cyan-400 text-sm">{batchQueue[currentBatchIndex]?.data.material}</p>
+            </div>
+
+            <button
+              onClick={() => setIsBatchPrinting(false)}
+              className="text-red-400 hover:text-red-300 text-sm font-bold"
+            >
+              Cancel Batch
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Hidden Batch Canvas Renderer */}
+      <div className="fixed top-0 left-0 opacity-0 pointer-events-none -z-50 overflow-hidden w-1 h-1">
+        {isBatchPrinting && currentBatchIndex >= 0 && batchQueue[currentBatchIndex] && (
+          <LabelCanvas
+            key={`batch-${currentBatchIndex}`} // Force re-mount
+            data={batchQueue[currentBatchIndex].data}
+            settings={batchQueue[currentBatchIndex].settings}
+            widthMm={selectedLabel.widthMm}
+            heightMm={selectedLabel.heightMm}
+            onCanvasReady={setBatchCanvas}
+            scale={2} // High res for print
+          />
+        )}
+      </div>
     </div>
   );
 };
