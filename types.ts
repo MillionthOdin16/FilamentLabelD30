@@ -100,9 +100,26 @@ export interface LabelPreset {
   name: string;
   widthMm: number;
   heightMm: number;
+  description: string;
+  group?: 'Standard' | 'D30/Small';
   deviceId: string;
   gatt?: BluetoothRemoteGATTServer;
 }
+
+export const LABEL_PRESETS: LabelPreset[] = [
+  // D30 Series (Standard)
+  { id: '12x30', name: '12x30mm', widthMm: 30, heightMm: 12, description: 'Small Tag', group: 'D30/Small', deviceId: '' },
+  { id: '12x40', name: '12x40mm', widthMm: 40, heightMm: 12, description: 'Cable / Tag', group: 'D30/Small', deviceId: '' },
+  { id: '14x30', name: '14x30mm', widthMm: 30, heightMm: 14, description: 'Standard Short', group: 'D30/Small', deviceId: '' },
+  { id: '14x40', name: '14x40mm', widthMm: 40, heightMm: 14, description: 'Standard Medium', group: 'D30/Small', deviceId: '' },
+  { id: '14x50', name: '14x50mm', widthMm: 50, heightMm: 14, description: 'Standard Long', group: 'D30/Small', deviceId: '' },
+  { id: '15x30', name: '15x30mm', widthMm: 30, heightMm: 15, description: 'Wide Short', group: 'D30/Small', deviceId: '' },
+  { id: '15x50', name: '15x50mm', widthMm: 50, heightMm: 15, description: 'Wide Long', group: 'D30/Small', deviceId: '' },
+
+  // Special / Continuous
+  { id: '6x22', name: '6x22mm', widthMm: 22, heightMm: 6, description: 'Mini / Price Tag', group: 'D30/Small', deviceId: '' },
+  { id: '6x100', name: '6mm Continuous', widthMm: 100, heightMm: 6, description: 'Continuous Tape', group: 'D30/Small', deviceId: '' },
+];
 
 // Global Bluetooth Types
 declare global {

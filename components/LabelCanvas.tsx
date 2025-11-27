@@ -276,6 +276,20 @@ const LabelCanvas: React.FC<LabelCanvasProps> = ({
       // --- THEME RENDERERS ---
 
       const renderSwatch = () => {
+        if (isNano) {
+          // Nano Swatch: Color Block | Material | Temp
+          const colorW = safeWidth * 0.15;
+          ctx.fillStyle = data.colorHex || '#000';
+          ctx.fillRect(startX, startY, colorW, safeHeight);
+
+          const contentX = startX + colorW + (4 * s);
+          const contentW = safeWidth - colorW - (4 * s);
+
+          drawTextFit(data.material, contentX, startY, contentW * 0.6, safeHeight, '900', 30 * s, 'sans-serif', fg, 'left', 'middle');
+          drawTextFit(`${data.minTemp}-${data.maxTemp}°`, contentX + (contentW * 0.6), startY, contentW * 0.4, safeHeight, 'bold', 20 * s, 'monospace', fg, 'right', 'middle');
+          return;
+        }
+
         if (isMicro) {
           let contentX = startX;
           let contentW = safeWidth;
@@ -469,6 +483,25 @@ const LabelCanvas: React.FC<LabelCanvasProps> = ({
       };
 
       const renderTechnical = () => {
+        if (isNano) {
+          // Nano Technical: Brand | Material | Specs
+          const col1W = safeWidth * 0.25;
+          const col2W = safeWidth * 0.40;
+          const col3W = safeWidth - col1W - col2W;
+
+          ctx.lineWidth = 1 * s;
+          ctx.strokeStyle = fg;
+          ctx.strokeRect(startX, startY, safeWidth, safeHeight);
+
+          drawLine(startX + col1W, startY, startX + col1W, startY + safeHeight, 1);
+          drawLine(startX + col1W + col2W, startY, startX + col1W + col2W, startY + safeHeight, 1);
+
+          drawTextFit(data.brand.substring(0, 4).toUpperCase(), startX, startY, col1W, safeHeight, 'bold', 18 * s, 'monospace', fg, 'center', 'middle');
+          drawTextFit(data.material, startX + col1W, startY, col2W, safeHeight, 'bold', 20 * s, 'monospace', fg, 'center', 'middle');
+          drawTextFit(`${data.minTemp}-${data.maxTemp}`, startX + col1W + col2W, startY, col3W, safeHeight, 'normal', 16 * s, 'monospace', fg, 'center', 'middle');
+          return;
+        }
+
         if (isMicro) {
           // ... existing micro logic ...
           const col1W = safeWidth * 0.22;
@@ -553,6 +586,16 @@ const LabelCanvas: React.FC<LabelCanvasProps> = ({
       };
 
       const renderMaintenance = () => {
+        if (isNano) {
+          // Nano Maintenance: Simple Check
+          const boxS = safeHeight * 0.8;
+          ctx.strokeStyle = fg;
+          ctx.lineWidth = 1 * s;
+          ctx.strokeRect(startX, startY + (safeHeight - boxS) / 2, boxS, boxS);
+          drawTextFit("Dried", startX + boxS + (4 * s), startY, safeWidth - boxS - (4 * s), safeHeight, 'normal', 20 * s, 'sans-serif', fg, 'left', 'middle');
+          return;
+        }
+
         if (isMicro) { renderTechnical(); return; }
 
         // Header
@@ -609,6 +652,17 @@ const LabelCanvas: React.FC<LabelCanvasProps> = ({
       };
 
       const renderBold = () => {
+        if (isNano) {
+          // Nano Bold: Brand (Small) | Material (Large)
+          const brandW = safeWidth * 0.3;
+          ctx.fillStyle = fg;
+          ctx.fillRect(startX, startY, brandW, safeHeight);
+          drawTextFit(data.brand.substring(0, 4).toUpperCase(), startX, startY, brandW, safeHeight, '900', 18 * s, 'sans-serif', bg, 'center', 'middle');
+
+          drawTextFit(data.material.toUpperCase(), startX + brandW + (4 * s), startY, safeWidth - brandW - (4 * s), safeHeight, '900', 35 * s, 'sans-serif', fg, 'center', 'middle');
+          return;
+        }
+
         if (isMicro) {
           const leftW = safeWidth * 0.30;
           ctx.fillStyle = fg;
@@ -658,6 +712,17 @@ const LabelCanvas: React.FC<LabelCanvasProps> = ({
       };
 
       const renderModern = () => {
+        if (isNano) {
+          // Nano Modern: Minimalist Bar | Material
+          const barW = 6 * s;
+          ctx.fillStyle = data.colorHex || '#000';
+          if (settings.invert) ctx.fillStyle = 'white';
+          ctx.fillRect(startX, startY, barW, safeHeight);
+
+          drawTextFit(data.material, startX + barW + (4 * s), startY, safeWidth - barW - (4 * s), safeHeight, '900', 32 * s, 'sans-serif', fg, 'left', 'middle');
+          return;
+        }
+
         if (isMicro) {
           const barW = 8 * s;
           ctx.fillStyle = data.colorHex || '#000';
@@ -714,6 +779,11 @@ const LabelCanvas: React.FC<LabelCanvasProps> = ({
 
       const renderMinimal = () => {
         // Ultra-clean minimal design - just the essentials
+        if (isNano) {
+          drawTextFit(data.material, startX, startY, safeWidth, safeHeight, '900', 35 * s, 'sans-serif', fg, 'center', 'middle');
+          return;
+        }
+
         if (isMicro) {
           // For micro labels: Material | Temps
           const col1W = safeWidth * 0.55;
