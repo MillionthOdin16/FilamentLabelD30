@@ -553,7 +553,7 @@ const App: React.FC = () => {
                     <Ruler size={16} />
                     <h3 className="text-xs font-bold uppercase tracking-wider">Layout Size</h3>
                   </div>
-                  <div ref={labelListRef} className="flex gap-3 overflow-x-auto pb-4 px-1 no-scrollbar snap-x w-full">
+                  <div ref={labelListRef} className="flex gap-3 overflow-x-auto pb-4 -mx-6 px-6 no-scrollbar snap-x">
                     {LABEL_PRESETS.map((preset) => (
                       <button
                         id={`label-${preset.id}`}
