@@ -534,7 +534,7 @@ const App: React.FC = () => {
             {activeTab === 'editor' && (
               <>
                 {/* --- LIVE PREVIEW SECTION (First & Sticky) --- */}
-                <section className="flex flex-col items-center gap-2 sticky top-[150px] z-20 bg-gray-950/80 backdrop-blur-sm py-4 -mx-6 px-6 border-b border-gray-800/50 mb-4 transition-all duration-300">
+                <section className="flex flex-col items-center gap-2 sticky top-[136px] z-20 bg-gray-950 py-4 -mx-6 px-6 border-b border-gray-800 shadow-2xl mb-4 transition-all duration-300">
                   <div className="p-1 bg-white rounded shadow-2xl mt-4 max-w-full">
                     <LabelCanvas
                       data={filamentData} settings={printSettings} widthMm={selectedLabel.widthMm} heightMm={selectedLabel.heightMm}
@@ -553,7 +553,7 @@ const App: React.FC = () => {
                     <Ruler size={16} />
                     <h3 className="text-xs font-bold uppercase tracking-wider">Layout Size</h3>
                   </div>
-                  <div ref={labelListRef} className="flex gap-3 overflow-x-auto pb-4 -mx-6 px-6 no-scrollbar snap-x after:content-[''] after:block after:w-6 after:flex-shrink-0">
+                  <div ref={labelListRef} className="flex gap-3 overflow-x-auto pb-4 -mx-6 px-6 no-scrollbar snap-x after:content-[''] after:block after:w-12 after:flex-shrink-0">
                     {LABEL_PRESETS.map((preset) => (
                       <button
                         id={`label-${preset.id}`}
