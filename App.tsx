@@ -534,7 +534,7 @@ const App: React.FC = () => {
             {activeTab === 'editor' && (
               <>
                 {/* --- LIVE PREVIEW SECTION (First & Sticky) --- */}
-                <section className="flex flex-col items-center gap-2">
+                <section className="flex flex-col items-center gap-2 sticky top-[150px] z-20 bg-gray-950/80 backdrop-blur-sm py-4 -mx-6 px-6 border-b border-gray-800/50 mb-4 transition-all duration-300">
                   <div className="p-1 bg-white rounded shadow-2xl mt-4 max-w-full">
                     <LabelCanvas
                       data={filamentData} settings={printSettings} widthMm={selectedLabel.widthMm} heightMm={selectedLabel.heightMm}
