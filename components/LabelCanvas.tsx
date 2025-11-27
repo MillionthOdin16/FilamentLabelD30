@@ -335,17 +335,19 @@ const LabelCanvas: React.FC<LabelCanvasProps> = ({
 
           // Stats Icons & Text
           const statsX = contentX + colorW + (2 * s);
-          const statColW = statsW / 2;
-          const iconS = row3H * 0.8;
+          // Give Nozzle more space (approx 55%) vs Bed (45%)
+          const nozzleW = statsW * 0.55;
+          const bedW = statsW * 0.45;
+          const iconS = row3H * 0.7; // Reduce icon size slightly
 
           // Nozzle
           drawIcon('nozzle', statsX, row3Y + (row3H - iconS) / 2, iconS, fg);
-          drawTextFit(`${data.minTemp}-${data.maxTemp}`, statsX + iconS + (2 * s), row3Y, statColW - iconS - (2 * s), row3H, 'bold', 16 * s, 'monospace', fg, 'left', 'middle');
+          drawTextFit(`${data.minTemp}-${data.maxTemp}`, statsX + iconS + (1 * s), row3Y, nozzleW - iconS - (1 * s), row3H, 'bold', 16 * s, 'monospace', fg, 'left', 'middle');
 
           // Bed
-          const bedX = statsX + statColW;
+          const bedX = statsX + nozzleW;
           drawIcon('bed', bedX, row3Y + (row3H - iconS) / 2, iconS, fg);
-          drawTextFit(`${data.bedTempMin}-${data.bedTempMax}`, bedX + iconS + (2 * s), row3Y, statColW - iconS - (2 * s), row3H, 'bold', 16 * s, 'monospace', fg, 'left', 'middle');
+          drawTextFit(`${data.bedTempMin}-${data.bedTempMax}`, bedX + iconS + (1 * s), row3Y, bedW - iconS - (1 * s), row3H, 'bold', 16 * s, 'monospace', fg, 'left', 'middle');
           return;
         }
 
