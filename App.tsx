@@ -553,14 +553,14 @@ const App: React.FC = () => {
                     <Ruler size={16} />
                     <h3 className="text-xs font-bold uppercase tracking-wider">Layout Size</h3>
                   </div>
-                  <div ref={labelListRef} className="flex gap-3 overflow-x-auto pb-4 -mx-6 px-6 no-scrollbar snap-x after:content-[''] after:block after:w-12 after:flex-shrink-0">
+                  <div ref={labelListRef} className="flex flex-wrap justify-center gap-3 pb-4 px-1">
                     {LABEL_PRESETS.map((preset) => (
                       <button
                         id={`label-${preset.id}`}
                         key={preset.id}
                         onClick={() => setSelectedLabel(preset)}
                         className={`
-                            flex-shrink-0 snap-center w-28 p-2 rounded-xl border transition-all duration-200
+                            w-[30%] min-w-[100px] p-2 rounded-xl border transition-all duration-200
                             flex flex-col items-center gap-2
                             ${selectedLabel.id === preset.id
                             ? 'bg-cyan-500/10 border-cyan-500 shadow-lg shadow-cyan-900/20'
