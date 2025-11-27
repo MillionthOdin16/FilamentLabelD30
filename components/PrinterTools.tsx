@@ -95,6 +95,30 @@ const PrinterTools: React.FC<PrinterToolsProps> = ({ settings, onSettingsChange 
                         <option value="mark">Black Mark</option>
                     </select>
                 </div>
+
+                {/* Print Offset */}
+                <div className="bg-gray-800/50 p-2 rounded-lg border border-gray-700 col-span-2">
+                    <div className="flex items-center justify-between mb-2 text-gray-400">
+                        <div className="flex items-center gap-1.5">
+                            <AlignCenter size={12} className="rotate-90" />
+                            <span className="text-[10px] font-bold uppercase">Vertical Offset</span>
+                        </div>
+                        <span className="text-[10px] font-mono text-cyan-400">{settings.printOffsetMm || 0}mm</span>
+                    </div>
+                    <div className="flex items-center gap-3">
+                        <span className="text-[9px] text-gray-500 font-bold">-10</span>
+                        <input
+                            type="range"
+                            min="-10"
+                            max="10"
+                            step="0.5"
+                            value={settings.printOffsetMm || 0}
+                            onChange={(e) => updateSetting('printOffsetMm', parseFloat(e.target.value))}
+                            className="flex-1 h-1.5 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-cyan-500"
+                        />
+                        <span className="text-[9px] text-gray-500 font-bold">+10</span>
+                    </div>
+                </div>
             </div>
 
             {/* Actions */}

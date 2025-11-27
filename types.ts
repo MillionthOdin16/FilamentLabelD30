@@ -72,6 +72,7 @@ export interface PrintSettings {
   speed?: 1 | 2 | 3 | 4 | 5;
   labelType?: 'gap' | 'continuous' | 'mark';
   autoCalibrate?: boolean;
+  printOffsetMm?: number;
 }
 
 export interface HistoryEntry {

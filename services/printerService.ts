@@ -144,7 +144,7 @@ export const printLabel = async (device: BluetoothDevice, canvas: HTMLCanvasElem
     const pixels = imgData.data;
 
     const baseThreshold = Math.max(50, Math.min(200, 50 + (settings.density * 1.5)));
-    const grayscale = new Float32Array(width * height);
+    let grayscale = new Float32Array(width * height);
 
     // Convert to grayscale with ALPHA handling
     for (let i = 0; i < pixels.length / 4; i++) {
@@ -158,6 +158,34 @@ export const printLabel = async (device: BluetoothDevice, canvas: HTMLCanvasElem
         } else {
             grayscale[i] = r * 0.299 + g * 0.587 + b * 0.114;
         }
+    }
+
+    // --- OFFSET LOGIC (Software Shift) ---
+    // Shift image data vertically to adjust print position
+    // Positive offset = Shift DOWN (add blank lines at top)
+    // Negative offset = Shift UP (crop top lines)
+
+    const offsetMm = settings.printOffsetMm || 0;
+    const offsetPx = Math.round((offsetMm / 25.4) * 203);
+
+    let offsetGrayscale = new Float32Array(width * height);
+
+    if (offsetPx !== 0) {
+        console.log(`Applying print offset: ${offsetMm}mm (${offsetPx}px)`);
+        // Fill with white (255) initially
+        offsetGrayscale.fill(255);
+
+        for (let y = 0; y < height; y++) {
+            const targetY = y + offsetPx;
+            // Check bounds
+            if (targetY >= 0 && targetY < height) {
+                for (let x = 0; x < width; x++) {
+                    offsetGrayscale[targetY * width + x] = grayscale[y * width + x];
+                }
+            }
+        }
+        // Replace original grayscale with shifted version
+        grayscale = offsetGrayscale;
     }
 
     // --- AUTO ROTATION LOGIC ---
@@ -374,8 +402,8 @@ export const sendCalibrationPattern = async (device: BluetoothDevice, widthMm: n
 
 const writeValue = async (char: BluetoothRemoteGATTCharacteristic, value: Uint8Array) => {
     if (char.properties.writeWithoutResponse) {
-        await char.writeValueWithoutResponse(value);
+        await char.writeValueWithoutResponse(value as any);
     } else {
-        await char.writeValue(value);
+        await char.writeValue(value as any);
     }
 };
