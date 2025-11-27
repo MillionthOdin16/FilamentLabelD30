@@ -61,9 +61,13 @@ const LabelCanvas: React.FC<LabelCanvasProps> = ({
       ctx.lineCap = 'round';
 
       // --- MARGINS ---
+      const isNano = height < 80; // approx 10mm height threshold
       const isMicro = height < 142; // approx 18mm height threshold
       const userMargin = settings.marginMm || 1;
-      const marginPx = (isMicro ? Math.min(1, userMargin) : userMargin) * MM_TO_PX;
+
+      let marginPx = userMargin * MM_TO_PX;
+      if (isNano) marginPx = 2; // Force minimal margin for nano labels (approx 0.25mm)
+      else if (isMicro) marginPx = Math.min(1, userMargin) * MM_TO_PX;
 
       const safeWidth = width - (marginPx * 2);
       const safeHeight = height - (marginPx * 2);
@@ -103,7 +107,7 @@ const LabelCanvas: React.FC<LabelCanvasProps> = ({
         if (size > h * 0.90) size = h * 0.90;
 
         // Min size constraint
-        const minSize = isMicro ? 8 : 12 * s;
+        const minSize = isNano ? 6 : (isMicro ? 8 : 12 * s);
         size = Math.max(size, minSize);
 
         ctx.font = `${weight} ${size}px ${family}`;
