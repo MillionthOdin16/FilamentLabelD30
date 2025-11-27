@@ -538,7 +538,7 @@ const App: React.FC = () => {
                   <div className="p-1 bg-white rounded shadow-2xl mt-4 max-w-full">
                     <LabelCanvas
                       data={filamentData} settings={printSettings} widthMm={selectedLabel.widthMm} heightMm={selectedLabel.heightMm}
-                      onCanvasReady={setPreviewCanvas} scale={0.7}
+                      onCanvasReady={setPreviewCanvas}
                     />
                   </div>
 

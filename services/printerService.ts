@@ -237,7 +237,6 @@ export const printLabel = async (device: BluetoothDevice, canvas: HTMLCanvasElem
     const yH = Math.floor(finalHeight / 256);
 
     const header = new Uint8Array([0x1D, 0x76, 0x30, 0x00, xL, xH, yL, yH]);
-    const feedCmd = new Uint8Array([0x1B, 0x64, 3]); // Final Feed - minimal feed to clear print head
     const dataPayload = new Uint8Array(buffer);
 
     for (let i = 0; i < settings.copies; i++) {
@@ -257,7 +256,6 @@ export const printLabel = async (device: BluetoothDevice, canvas: HTMLCanvasElem
             await new Promise(r => setTimeout(r, 20));
         }
 
-        await writeValue(characteristic, feedCmd);
         if (i < settings.copies - 1) await new Promise(r => setTimeout(r, 1000));
     }
 };

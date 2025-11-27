@@ -775,7 +775,6 @@ const LabelCanvas: React.FC<LabelCanvasProps> = ({
     <canvas
       ref={canvasRef}
       className="max-w-full h-auto shadow-sm rounded-sm"
-      style={{ transform: `scale(${scale})`, transformOrigin: 'top center' }}
     />
   );
 };
