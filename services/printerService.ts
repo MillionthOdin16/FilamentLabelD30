@@ -1,28 +1,84 @@
 import { FilamentData, PrintSettings, PrinterInfo, CalibrationData } from '../types';
 
+// Persistent Connection State
+let cachedDevice: BluetoothDevice | null = null;
+let connectionListeners: ((isConnected: boolean) => void)[] = [];
+
+const notifyListeners = (isConnected: boolean) => {
+    connectionListeners.forEach(l => l(isConnected));
+};
+
+export const addConnectionListener = (listener: (isConnected: boolean) => void) => {
+    connectionListeners.push(listener);
+    // Notify immediately of current state
+    listener(!!cachedDevice && !!cachedDevice.gatt?.connected);
+};
+
+export const removeConnectionListener = (listener: (isConnected: boolean) => void) => {
+    connectionListeners = connectionListeners.filter(l => l !== listener);
+};
+
+export const getConnectedDevice = (): BluetoothDevice | null => {
+    if (cachedDevice && cachedDevice.gatt?.connected) {
+        return cachedDevice;
+    }
+    return null;
+};
+
+export const disconnectPrinter = () => {
+    if (cachedDevice && cachedDevice.gatt?.connected) {
+        cachedDevice.gatt.disconnect();
+    }
+    cachedDevice = null;
+    notifyListeners(false);
+};
+
 export const connectPrinter = async (): Promise<BluetoothDevice> => {
     if (!navigator.bluetooth) {
         throw new Error("Web Bluetooth is not supported in this browser.");
     }
 
-    const device = await navigator.bluetooth.requestDevice({
-        filters: [
-            { namePrefix: 'M' }, // M110, M02
-            { namePrefix: 'D' }, // D30
-            { namePrefix: 'Q' }, // Q30
-            { namePrefix: 'P' }, // Phomemo
-            { services: ['000018f0-0000-1000-8000-00805f9b34fb'] }, // Common service
-        ],
-        optionalServices: [
-            '000018f0-0000-1000-8000-00805f9b34fb',
-            '0000ff00-0000-1000-8000-00805f9b34fb',
-            'e7810a71-73ae-499d-8c15-faa9aef0c3f2', // Proprietary
-            '0000180f-0000-1000-8000-00805f9b34fb', // Battery
-            '0000180a-0000-1000-8000-00805f9b34fb'  // Device Information
-        ]
-    });
+    // Return cached device if still connected
+    if (cachedDevice && cachedDevice.gatt?.connected) {
+        return cachedDevice;
+    }
 
-    return device;
+    // Clean up old reference if it exists but disconnected
+    cachedDevice = null;
+
+    try {
+        const device = await navigator.bluetooth.requestDevice({
+            filters: [
+                { namePrefix: 'M' }, // M110, M02
+                { namePrefix: 'D' }, // D30
+                { namePrefix: 'Q' }, // Q30
+                { namePrefix: 'P' }, // Phomemo
+                { services: ['000018f0-0000-1000-8000-00805f9b34fb'] }, // Common service
+            ],
+            optionalServices: [
+                '000018f0-0000-1000-8000-00805f9b34fb',
+                '0000ff00-0000-1000-8000-00805f9b34fb',
+                'e7810a71-73ae-499d-8c15-faa9aef0c3f2', // Proprietary
+                '0000180f-0000-1000-8000-00805f9b34fb', // Battery
+                '0000180a-0000-1000-8000-00805f9b34fb'  // Device Information
+            ]
+        });
+
+        // Add disconnect listener
+        device.addEventListener('gattserverdisconnected', () => {
+            console.log("Printer disconnected");
+            cachedDevice = null;
+            notifyListeners(false);
+        });
+
+        cachedDevice = device;
+        notifyListeners(true);
+        return device;
+    } catch (e) {
+        cachedDevice = null;
+        notifyListeners(false);
+        throw e;
+    }
 };
 
 export const getDeviceDetails = async (device: BluetoothDevice): Promise<Partial<PrinterInfo>> => {
@@ -143,10 +199,21 @@ export const printLabel = async (device: BluetoothDevice, canvas: HTMLCanvasElem
     const imgData = ctx.getImageData(0, 0, width, height);
     const pixels = imgData.data;
 
-    const baseThreshold = Math.max(50, Math.min(200, 50 + (settings.density * 1.5)));
+    // Software Contrast Adjustment
+    // Adjust density here first since hardware command is often ignored
+    // Density 0-100. Neutral is 50.
+    // If > 50, darken (multiply). If < 50, lighten.
+
+    // Convert to grayscale with ALPHA handling and Contrast Adjustment
+    // 50 = standard. 100 = black. 0 = white.
+    const contrastFactor = (settings.density - 50) * 2; // -100 to 100 range roughly
+    // We will apply a power curve for contrast.
+    // Simplified: adjust the threshold or pixel value?
+    // User said "Changing darkness doesn't change anything".
+    // Let's modify the pixel values directly.
+
     let grayscale = new Float32Array(width * height);
 
-    // Convert to grayscale with ALPHA handling
     for (let i = 0; i < pixels.length / 4; i++) {
         const r = pixels[i * 4];
         const g = pixels[i * 4 + 1];
@@ -154,11 +221,30 @@ export const printLabel = async (device: BluetoothDevice, canvas: HTMLCanvasElem
         const a = pixels[i * 4 + 3];
 
         if (a < 128) {
-            grayscale[i] = 255;
+            grayscale[i] = 255; // Transparent -> White paper
         } else {
-            grayscale[i] = r * 0.299 + g * 0.587 + b * 0.114;
+            // Standard Luminance
+            let gray = r * 0.299 + g * 0.587 + b * 0.114;
+
+            // Apply Density/Contrast
+            // If density is high (100), we want gray values to be lower (darker).
+            // Formula: val = val * (1 - (density-50)/100)
+            if (settings.density !== 50) {
+                 const darkenFactor = (settings.density - 50) / 100; // -0.5 to 0.5
+                 // If darkenFactor is positive, we subtract from gray.
+                 // gray = gray - (gray * darkenFactor * 1.5)
+                 // e.g. gray=200, factor=0.5 -> 200 - 150 = 50 (Darker)
+                 gray = gray - (255 * darkenFactor);
+                 if (gray < 0) gray = 0;
+                 if (gray > 255) gray = 255;
+            }
+
+            grayscale[i] = gray;
         }
     }
+
+    // Base Threshold for dithering - standard is 128
+    const baseThreshold = 128;
 
     // --- OFFSET LOGIC (Software Shift) ---
     // Shift image data vertically to adjust print position
@@ -255,7 +341,7 @@ export const printLabel = async (device: BluetoothDevice, canvas: HTMLCanvasElem
     // --- COMMAND GENERATION ---
     const initCmd = new Uint8Array([0x1B, 0x40]);
 
-    // Set Density
+    // Set Density (Hardware)
     const densityByte = Math.max(1, Math.min(15, Math.ceil(settings.density / 100 * 15)));
     const densityCmd = new Uint8Array([0x1F, 0x11, 0x24, densityByte]);
 

@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
-import { ArrowDown, Zap, Wrench, AlertCircle, Settings, Gauge, AlignCenter, ScanLine } from 'lucide-react';
-import { connectPrinter, feedPaper, sendCalibrationPattern } from '../services/printerService';
+import { Wrench, Gauge, AlignCenter, ScanLine } from 'lucide-react';
 import { PrintSettings } from '../types';
 
 interface PrinterToolsProps {
@@ -9,38 +8,6 @@ interface PrinterToolsProps {
 }
 
 const PrinterTools: React.FC<PrinterToolsProps> = ({ settings, onSettingsChange }) => {
-    const [loading, setLoading] = useState(false);
-    const [msg, setMsg] = useState('');
-    const [isError, setIsError] = useState(false);
-
-    const handleAction = async (action: 'feed' | 'calibrate') => {
-        setLoading(true);
-        setMsg('Connecting...');
-        setIsError(false);
-        try {
-            const device = await connectPrinter();
-            if (action === 'feed') {
-                setMsg('Feeding paper...');
-                await feedPaper(device);
-            } else if (action === 'calibrate') {
-                setMsg('Printing test pattern...');
-                await sendCalibrationPattern(device, 40); // Default 40mm width
-            }
-            setMsg('Done!');
-            setTimeout(() => setMsg(''), 2000);
-        } catch (e: any) {
-            setIsError(true);
-            const errLower = e.message?.toLowerCase() || '';
-            if (e.name === 'SecurityError' || errLower.includes('permissions policy') || errLower.includes('disallowed')) {
-                setMsg('Blocked: Open in new tab');
-            } else {
-                setMsg(e.message?.substring(0, 25) || "Failed");
-            }
-            setTimeout(() => { setMsg(''); setIsError(false); }, 4000);
-        } finally {
-            setLoading(false);
-        }
-    };
 
     const updateSetting = (key: keyof PrintSettings, value: any) => {
         onSettingsChange({ ...settings, [key]: value });
@@ -120,40 +87,6 @@ const PrinterTools: React.FC<PrinterToolsProps> = ({ settings, onSettingsChange 
                     </div>
                 </div>
             </div>
-
-            {/* Actions */}
-            <div className="grid grid-cols-2 gap-3">
-                <button
-                    onClick={() => handleAction('feed')}
-                    disabled={loading}
-                    className="bg-gray-800 hover:bg-gray-700 p-3 rounded-lg flex flex-col items-center gap-2 transition-colors active:scale-95 border border-gray-700"
-                >
-                    <ArrowDown size={20} className="text-gray-400" />
-                    <span className="text-xs font-bold text-gray-300">Feed Paper</span>
-                </button>
-
-                <button
-                    onClick={() => handleAction('calibrate')}
-                    disabled={loading}
-                    className="bg-gray-800 hover:bg-gray-700 p-3 rounded-lg flex flex-col items-center gap-2 transition-colors active:scale-95 border border-gray-700"
-                >
-                    <Settings size={20} className="text-gray-400" />
-                    <span className="text-xs font-bold text-gray-300">Test Print</span>
-                </button>
-            </div>
-
-            {/* Status Message */}
-            {(msg || isError) && (
-                <div className={`
-                p-2 rounded-lg flex items-center justify-center gap-2 border border-dashed transition-all
-                ${isError ? 'bg-red-900/20 border-red-700' : 'bg-gray-800/50 border-gray-700'}
-            `}>
-                    {isError ? <AlertCircle size={14} className="text-red-400" /> : null}
-                    <span className={`text-[10px] font-bold ${isError ? 'text-red-400' : 'text-gray-500'}`}>
-                        {msg}
-                    </span>
-                </div>
-            )}
         </div>
     );
 };
