@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Camera, Printer, RotateCcw, PenTool, Loader2, Info, Bluetooth, Ruler, History, ArrowRight, Battery, BatteryFull, BatteryLow, BatteryMedium, ExternalLink, AlertTriangle, Eye, X, Download, Upload, Image as ImageIcon, Edit3, CheckCircle2, Sparkles, Package, Layout, BarChart3, Layers } from 'lucide-react';
+import { Camera, Printer, RotateCcw, PenTool, Loader2, Info, Bluetooth, Ruler, History, ArrowRight, Battery, BatteryFull, BatteryLow, BatteryMedium, ExternalLink, AlertTriangle, Eye, X, Download, Upload, Image as ImageIcon, Edit3, CheckCircle2, Sparkles, Package, Layout, BarChart3, Layers, PlusCircle, Scan } from 'lucide-react';
 import { AppState, FilamentData, LABEL_PRESETS, LabelPreset, PrintSettings, HistoryEntry, LabelTheme, PrinterInfo, PrintJob, LabelTemplate } from './types';
 import { analyzeFilamentImage } from './services/geminiService';
-import { connectPrinter, printLabel, getBatteryLevel, getDeviceDetails, checkPrinterStatus } from './services/printerService';
+import { connectPrinter, printLabel, getBatteryLevel, getDeviceDetails, checkPrinterStatus, addConnectionListener, removeConnectionListener, getConnectedDevice } from './services/printerService';
 import CameraCapture from './components/CameraCapture';
 import LabelEditor from './components/LabelEditor';
 import LabelCanvas from './components/LabelCanvas';
@@ -62,12 +62,14 @@ const App: React.FC = () => {
   const [isIframe, setIsIframe] = useState(false);
   const [showIframeWarning, setShowIframeWarning] = useState(true);
   const [showSuccess, setShowSuccess] = useState(false);
+  const [isConnected, setIsConnected] = useState(false);
 
   // Batch Printing State
   const [batchQueue, setBatchQueue] = useState<PrintJob[]>([]);
   const [currentBatchIndex, setCurrentBatchIndex] = useState<number>(-1);
   const [batchCanvas, setBatchCanvas] = useState<HTMLCanvasElement | null>(null);
   const [isBatchPrinting, setIsBatchPrinting] = useState(false);
+  const [batchOverrideSize, setBatchOverrideSize] = useState<LabelPreset | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -86,6 +88,26 @@ const App: React.FC = () => {
     } catch (e) {
       setIsIframe(true);
     }
+
+    // Bluetooth Listeners
+    const listener = (connected: boolean) => {
+      setIsConnected(connected);
+      if (connected) {
+        // Auto-fetch details if reconnected
+        const device = getConnectedDevice();
+        if (device) {
+           getBatteryLevel(device).then(setBatteryLevel);
+           getDeviceDetails(device).then(setPrinterInfo);
+        }
+      } else {
+        setBatteryLevel(null);
+      }
+    };
+    addConnectionListener(listener);
+
+    return () => {
+      removeConnectionListener(listener);
+    };
   }, []);
 
   const saveToHistory = (data: FilamentData) => {
@@ -168,7 +190,7 @@ const App: React.FC = () => {
     setIsProcessing(true);
     if (!isBatchItem) {
       setPrintStep('connecting');
-      setStatusMsg('Searching for printer...');
+      setStatusMsg(isConnected ? 'Using connected printer...' : 'Searching for printer...');
       setErrorMsg(null);
       setShowSuccess(false);
     }
@@ -177,7 +199,7 @@ const App: React.FC = () => {
       const device = await connectPrinter();
 
       // Only fetch details if we don't have them or it's the first print
-      if (!printerInfo || !isBatchItem) {
+      if ((!printerInfo || !isBatchItem) && !isBatchPrinting) {
         if (!isBatchItem) {
           setPrintStep('fetching');
           setStatusMsg('Reading device information...');
@@ -302,13 +324,36 @@ const App: React.FC = () => {
     processBatchItem();
   }, [currentBatchIndex, batchCanvas, isBatchPrinting, batchQueue]);
 
-  const handleBatchPrint = async (jobs: PrintJob[]) => {
+  const handleBatchPrint = async (jobs: PrintJob[], overrideSizeId?: string) => {
     if (jobs.length === 0) return;
+
+    if (overrideSizeId && overrideSizeId !== 'default') {
+        const preset = LABEL_PRESETS.find(p => p.id === overrideSizeId);
+        setBatchOverrideSize(preset || null);
+    } else {
+        setBatchOverrideSize(null);
+    }
+
     setBatchQueue(jobs);
     setCurrentBatchIndex(0);
     setIsBatchPrinting(true);
     setPrintStep('connecting'); // Initial status
     setStatusMsg('Starting batch print...');
+  };
+
+  const handleAddToBatch = () => {
+      // Add current filament to batch history locally but don't clear form
+      // Actually we just want to create a PrintJob and add it to a queue, but the current BatchGenerator works off History.
+      // So we should save to history.
+      saveToHistory(filamentData);
+
+      // Also, visually feedback
+      setStatusMsg("Added to Batch History");
+      setPrintStep('success'); // Re-use success visual temporarily
+      setTimeout(() => {
+          setPrintStep('idle');
+          setStatusMsg('');
+      }, 1500);
   };
 
   const handleSelectTemplate = (template: LabelTemplate) => {
@@ -337,6 +382,12 @@ const App: React.FC = () => {
   const handlePrintMore = () => {
     setShowSuccess(false);
     setPrintStep('idle');
+  };
+
+  const handleScanAnother = () => {
+    setShowSuccess(false);
+    setPrintStep('idle');
+    handleStartCapture();
   };
 
   const resetFlow = () => {
@@ -386,6 +437,11 @@ const App: React.FC = () => {
                 <span className="text-[9px] bg-cyan-900/40 text-cyan-400 px-1 rounded border border-cyan-800/50">
                   {printerInfo.model}
                 </span>
+              )}
+              {isConnected && (
+                  <span className="text-[9px] bg-green-900/40 text-green-400 px-1 rounded border border-green-800/50 flex items-center gap-1">
+                      <Bluetooth size={8} /> Connected
+                  </span>
               )}
             </div>
           </div>
@@ -594,6 +650,16 @@ const App: React.FC = () => {
                     onConfirm={() => { }}
                     onDownload={handleDownloadPng}
                   />
+
+                  {/* Add To Batch Button */}
+                   <button
+                    onClick={handleAddToBatch}
+                    className="w-full mt-4 py-3 bg-gray-800 border border-gray-700 hover:bg-gray-700 text-white font-bold rounded-xl transition-colors flex items-center justify-center gap-2"
+                  >
+                    <PlusCircle size={20} className="text-cyan-400" />
+                    <span>Add to Batch Queue</span>
+                  </button>
+
                 </section>
 
                 <PrinterTools settings={printSettings} onSettingsChange={setPrintSettings} />
@@ -628,6 +694,20 @@ const App: React.FC = () => {
             onDownload={handleDownloadPng}
           />
         )}
+
+        {/* Custom Scan Another Action in Success View */}
+        {showSuccess && state === AppState.PRINTING_SUCCESS && (
+            <div className="fixed bottom-24 left-1/2 transform -translate-x-1/2 z-50">
+                 <button
+                    onClick={handleScanAnother}
+                    className="bg-gray-800 border border-gray-700 text-white px-6 py-3 rounded-full shadow-xl flex items-center gap-2 hover:bg-gray-700 transition-colors"
+                >
+                    <Scan size={18} className="text-cyan-400" />
+                    <span className="font-bold text-sm">Scan Another</span>
+                </button>
+            </div>
+        )}
+
       </main>
 
       {(state === AppState.EDITING || state === AppState.PRINTING_SUCCESS) && !showSuccess && activeTab === 'editor' && (
@@ -681,7 +761,7 @@ const App: React.FC = () => {
                 `}
               >
                 <Printer size={24} />
-                PRINT LABEL
+                {isConnected ? 'PRINT LABEL' : 'CONNECT & PRINT'}
                 {printSettings.copies > 1 && (
                   <span className="bg-white/20 px-2 py-0.5 rounded-full text-sm">×{printSettings.copies}</span>
                 )}
@@ -735,8 +815,8 @@ const App: React.FC = () => {
             key={`batch-${currentBatchIndex}`} // Force re-mount
             data={batchQueue[currentBatchIndex].data}
             settings={batchQueue[currentBatchIndex].settings}
-            widthMm={selectedLabel.widthMm}
-            heightMm={selectedLabel.heightMm}
+            widthMm={batchOverrideSize ? batchOverrideSize.widthMm : selectedLabel.widthMm}
+            heightMm={batchOverrideSize ? batchOverrideSize.heightMm : selectedLabel.heightMm}
             onCanvasReady={setBatchCanvas}
             scale={2} // High res for print
           />

@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
-import { HistoryEntry, FilamentData, PrintJob } from '../types';
+import { HistoryEntry, FilamentData, PrintJob, LABEL_PRESETS, LabelPreset } from '../types';
 import { generateBatchJobs, BatchGenerationOptions, generateBatchReport } from '../services/batchGeneratorService';
-import { Check, Printer, Settings, AlertCircle, FileText, Clock, ArrowRight } from 'lucide-react';
+import { Check, Printer, Settings, AlertCircle, FileText, Clock, ArrowRight, Ruler } from 'lucide-react';
 
 interface BatchGeneratorProps {
     history: HistoryEntry[];
-    onPrintBatch: (jobs: PrintJob[]) => Promise<void>;
+    onPrintBatch: (jobs: PrintJob[], overrideSizeId?: string) => Promise<void>;
 }
 
 const BatchGenerator: React.FC<BatchGeneratorProps> = ({ history, onPrintBatch }) => {
@@ -17,6 +17,7 @@ const BatchGenerator: React.FC<BatchGeneratorProps> = ({ history, onPrintBatch }
         addTimeStamps: true,
         skipDuplicates: false
     });
+    const [overrideSize, setOverrideSize] = useState<string>('default'); // 'default' or preset ID
     const [generatedJobs, setGeneratedJobs] = useState<PrintJob[]>([]);
     const [report, setReport] = useState<string>('');
     const [isPrinting, setIsPrinting] = useState(false);
@@ -41,21 +42,27 @@ const BatchGenerator: React.FC<BatchGeneratorProps> = ({ history, onPrintBatch }
         if (selectedFilaments.length === 0) return;
 
         const result = generateBatchJobs(selectedFilaments, history, options);
+
         setGeneratedJobs(result.jobs);
         setReport(generateBatchReport(result));
     };
 
     const handlePrint = async () => {
         if (generatedJobs.length === 0) return;
+
         setIsPrinting(true);
         try {
-            await onPrintBatch(generatedJobs);
+            // Pass the generated jobs AND the optional override size to App.tsx
+            await onPrintBatch(generatedJobs, overrideSize);
         } catch (e) {
             console.error("Batch print failed", e);
         } finally {
             setIsPrinting(false);
         }
     };
+
+    // Helper to find preset name
+    const getPresetName = (id: string) => LABEL_PRESETS.find(p => p.id === id)?.name || id;
 
     return (
         <div className="space-y-6">
@@ -108,6 +115,24 @@ const BatchGenerator: React.FC<BatchGeneratorProps> = ({ history, onPrintBatch }
                     )}
                 </div>
 
+                 {/* Global Settings Override */}
+                <div className="mb-4 p-3 bg-gray-800/50 rounded-lg border border-gray-700">
+                    <div className="flex items-center gap-2 mb-2 text-cyan-400">
+                        <Ruler size={14} />
+                        <span className="text-xs font-bold uppercase">Batch Label Size</span>
+                    </div>
+                     <select
+                        value={overrideSize}
+                        onChange={(e) => setOverrideSize(e.target.value)}
+                        className="w-full bg-gray-700 text-white text-xs rounded p-2 border border-gray-600 outline-none focus:border-cyan-500"
+                    >
+                        <option value="default">Use Auto Recommendation</option>
+                        {LABEL_PRESETS.map(p => (
+                             <option key={p.id} value={p.id}>{p.name} ({p.widthMm}x{p.heightMm}mm)</option>
+                        ))}
+                    </select>
+                </div>
+
                 {/* Options */}
                 <div className="grid grid-cols-2 gap-4 mb-4">
                     <label className="flex items-center gap-2 text-xs text-gray-300 cursor-pointer">
@@ -117,14 +142,15 @@ const BatchGenerator: React.FC<BatchGeneratorProps> = ({ history, onPrintBatch }
                             onChange={e => setOptions({ ...options, optimizeOrder: e.target.checked })}
                             className="rounded bg-gray-700 border-gray-600 text-cyan-500 focus:ring-0"
                         />
-                        Optimize Order (Save Paper)
+                        Optimize Order
                     </label>
                     <label className="flex items-center gap-2 text-xs text-gray-300 cursor-pointer">
                         <input
                             type="checkbox"
                             checked={options.autoRecommendSettings}
+                            disabled={overrideSize !== 'default'}
                             onChange={e => setOptions({ ...options, autoRecommendSettings: e.target.checked })}
-                            className="rounded bg-gray-700 border-gray-600 text-cyan-500 focus:ring-0"
+                            className={`rounded bg-gray-700 border-gray-600 text-cyan-500 focus:ring-0 ${overrideSize !== 'default' ? 'opacity-50' : ''}`}
                         />
                         AI Smart Settings
                     </label>
@@ -164,6 +190,13 @@ const BatchGenerator: React.FC<BatchGeneratorProps> = ({ history, onPrintBatch }
                     <pre className="bg-gray-950 p-3 rounded-lg text-[10px] text-gray-400 font-mono overflow-x-auto mb-4 border border-gray-800">
                         {report}
                     </pre>
+
+                    {overrideSize !== 'default' && (
+                        <div className="mb-4 p-2 bg-yellow-900/20 border border-yellow-700/50 rounded flex items-center gap-2 text-xs text-yellow-500">
+                            <AlertCircle size={14} />
+                            <span>Ensure printer is loaded with <b>{getPresetName(overrideSize)}</b> labels.</span>
+                        </div>
+                    )}
 
                     <button
                         onClick={handlePrint}
