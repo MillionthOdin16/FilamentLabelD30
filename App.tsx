@@ -519,7 +519,7 @@ const App: React.FC = () => {
 
             <div className="text-xs text-gray-600 flex items-center gap-2 pt-8">
               <Bluetooth size={14} />
-              <span>Supports Phomemo M110, M02, D30, Q30</span>
+              <span>Supports Phomemo M110, M02, D30, Q30 • IDPRT S1 (experimental)</span>
             </div>
           </div>
         )}
