@@ -1,5 +1,16 @@
 import { FilamentData, PrintSettings, PrinterInfo, CalibrationData } from '../types';
 
+// Common BLE service UUIDs used by thermal printers
+const PRINTER_SERVICES = {
+    PHOMEMO: '000018f0-0000-1000-8000-00805f9b34fb',      // Phomemo printers
+    ALT_SERVICE: '0000ff00-0000-1000-8000-00805f9b34fb',  // Alternative service
+    PROPRIETARY: 'e7810a71-73ae-499d-8c15-faa9aef0c3f2',  // Proprietary BLE service
+    HM10_UART: '0000ffe0-0000-1000-8000-00805f9b34fb',    // HM-10 UART module (common in Chinese printers)
+    NORDIC_UART: '6e400001-b5a3-f393-e0a9-e50e24dcca9e',  // Nordic UART Service (NUS)
+    BATTERY: '0000180f-0000-1000-8000-00805f9b34fb',      // Battery Service
+    DEVICE_INFO: '0000180a-0000-1000-8000-00805f9b34fb',  // Device Information Service
+};
+
 export const connectPrinter = async (): Promise<BluetoothDevice> => {
     if (!navigator.bluetooth) {
         throw new Error("Web Bluetooth is not supported in this browser.");
@@ -11,14 +22,19 @@ export const connectPrinter = async (): Promise<BluetoothDevice> => {
             { namePrefix: 'D' }, // D30
             { namePrefix: 'Q' }, // Q30
             { namePrefix: 'P' }, // Phomemo
-            { services: ['000018f0-0000-1000-8000-00805f9b34fb'] }, // Common service
+            { namePrefix: 'S' }, // IDPRT S1 (experimental)
+            { namePrefix: 'iD' }, // IDPRT printers (experimental)
+            { services: [PRINTER_SERVICES.PHOMEMO] }, // Common service
+            { services: [PRINTER_SERVICES.HM10_UART] }, // HM-10 based printers
         ],
         optionalServices: [
-            '000018f0-0000-1000-8000-00805f9b34fb',
-            '0000ff00-0000-1000-8000-00805f9b34fb',
-            'e7810a71-73ae-499d-8c15-faa9aef0c3f2', // Proprietary
-            '0000180f-0000-1000-8000-00805f9b34fb', // Battery
-            '0000180a-0000-1000-8000-00805f9b34fb'  // Device Information
+            PRINTER_SERVICES.PHOMEMO,
+            PRINTER_SERVICES.ALT_SERVICE,
+            PRINTER_SERVICES.PROPRIETARY,
+            PRINTER_SERVICES.HM10_UART,
+            PRINTER_SERVICES.NORDIC_UART,
+            PRINTER_SERVICES.BATTERY,
+            PRINTER_SERVICES.DEVICE_INFO
         ]
     });
 
@@ -34,7 +50,7 @@ export const getDeviceDetails = async (device: BluetoothDevice): Promise<Partial
 
         // Device Information Service
         try {
-            const service = await server.getPrimaryService('0000180a-0000-1000-8000-00805f9b34fb');
+            const service = await server.getPrimaryService(PRINTER_SERVICES.DEVICE_INFO);
 
             // Model Number
             try {
@@ -68,7 +84,7 @@ export const getBatteryLevel = async (device: BluetoothDevice): Promise<number |
         const server = device.gatt;
         if (!server) return null;
 
-        const batteryService = await server.getPrimaryService('0000180f-0000-1000-8000-00805f9b34fb');
+        const batteryService = await server.getPrimaryService(PRINTER_SERVICES.BATTERY);
         const batteryLevelChar = await batteryService.getCharacteristic('00002a19-0000-1000-8000-00805f9b34fb');
         const value = await batteryLevelChar.readValue();
         return value.getUint8(0);
@@ -78,29 +94,60 @@ export const getBatteryLevel = async (device: BluetoothDevice): Promise<number |
     }
 };
 
+// Common write characteristic UUIDs for thermal printers
+const WRITE_CHARACTERISTIC_UUIDS = [
+    '0000ffe1-0000-1000-8000-00805f9b34fb', // HM-10 UART write characteristic
+    '6e400002-b5a3-f393-e0a9-e50e24dcca9e', // Nordic UART TX characteristic
+];
+
 const getWriteCharacteristic = async (device: BluetoothDevice): Promise<BluetoothRemoteGATTCharacteristic> => {
     if (!device.gatt?.connected) await device.gatt?.connect();
     const server = device.gatt;
     if (!server) throw new Error("GATT Server not found");
 
+    // Services to try, in order of preference
     const services = [
-        '000018f0-0000-1000-8000-00805f9b34fb',
-        '0000ff00-0000-1000-8000-00805f9b34fb',
-        'e7810a71-73ae-499d-8c15-faa9aef0c3f2'
+        PRINTER_SERVICES.PHOMEMO,      // Phomemo printers
+        PRINTER_SERVICES.ALT_SERVICE,  // Alternative service
+        PRINTER_SERVICES.PROPRIETARY,  // Proprietary BLE service
+        PRINTER_SERVICES.HM10_UART,    // HM-10 based printers (common in IDPRT and other Chinese printers)
+        PRINTER_SERVICES.NORDIC_UART,  // Nordic UART Service
     ];
 
     for (const sUuid of services) {
         try {
             const service = await server.getPrimaryService(sUuid);
+            
+            // First try known write characteristic UUIDs for this service type
+            if (sUuid === PRINTER_SERVICES.HM10_UART) {
+                try {
+                    const char = await service.getCharacteristic(WRITE_CHARACTERISTIC_UUIDS[0]);
+                    if (char.properties.write || char.properties.writeWithoutResponse) {
+                        console.log(`Found HM-10 write characteristic`);
+                        return char;
+                    }
+                } catch (e) { /* continue to fallback */ }
+            } else if (sUuid === PRINTER_SERVICES.NORDIC_UART) {
+                try {
+                    const char = await service.getCharacteristic(WRITE_CHARACTERISTIC_UUIDS[1]);
+                    if (char.properties.write || char.properties.writeWithoutResponse) {
+                        console.log(`Found Nordic UART write characteristic`);
+                        return char;
+                    }
+                } catch (e) { /* continue to fallback */ }
+            }
+            
+            // Fallback: enumerate all characteristics and find any writable one
             const chars = await service.getCharacteristics();
             for (const c of chars) {
                 if (c.properties.write || c.properties.writeWithoutResponse) {
+                    console.log(`Found writable characteristic in service ${sUuid}`);
                     return c;
                 }
             }
         } catch (e) { continue; }
     }
-    throw new Error("No writeable characteristic found.");
+    throw new Error("No writeable characteristic found. The printer may use an unsupported Bluetooth protocol.");
 }
 
 export const feedPaper = async (device: BluetoothDevice) => {
