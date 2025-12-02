@@ -1,28 +1,113 @@
 import { FilamentData, PrintSettings, PrinterInfo, CalibrationData } from '../types';
 
+// Persistent Connection State
+let cachedDevice: BluetoothDevice | null = null;
+let connectionListeners: ((isConnected: boolean) => void)[] = [];
+
+const notifyListeners = (isConnected: boolean) => {
+    connectionListeners.forEach(l => l(isConnected));
+};
+
+export const addConnectionListener = (listener: (isConnected: boolean) => void) => {
+    connectionListeners.push(listener);
+    // Notify immediately of current state
+    listener(!!cachedDevice && !!cachedDevice.gatt?.connected);
+};
+
+export const removeConnectionListener = (listener: (isConnected: boolean) => void) => {
+    connectionListeners = connectionListeners.filter(l => l !== listener);
+};
+
+export const getConnectedDevice = (): BluetoothDevice | null => {
+    if (cachedDevice && cachedDevice.gatt?.connected) {
+        return cachedDevice;
+    }
+    return null;
+};
+
+export const disconnectPrinter = () => {
+    if (cachedDevice && cachedDevice.gatt?.connected) {
+        cachedDevice.gatt.disconnect();
+    }
+    cachedDevice = null;
+    notifyListeners(false);
+};
+
+// Services and Characteristics
+const PRINTER_SERVICES = {
+    // Phomemo Standard
+    PHOMEMO: '000018f0-0000-1000-8000-00805f9b34fb',
+    ALT_SERVICE: '0000ff00-0000-1000-8000-00805f9b34fb',
+    PROPRIETARY: 'e7810a71-73ae-499d-8c15-faa9aef0c3f2',
+
+    // HM-10 UART (Common in generic/iDPRT S1?)
+    HM10_UART: '0000ffe0-0000-1000-8000-00805f9b34fb',
+
+    // Nordic UART (Common in BLE devices)
+    NORDIC_UART: '6e400001-b5a3-f393-e0a9-e50e24dcca9e',
+
+    // Standard Info
+    BATTERY: '0000180f-0000-1000-8000-00805f9b34fb',
+    DEVICE_INFO: '0000180a-0000-1000-8000-00805f9b34fb'
+};
+
+const WRITE_CHARACTERISTICS = {
+    // HM-10
+    HM10_TX: '0000ffe1-0000-1000-8000-00805f9b34fb',
+    // Nordic
+    NORDIC_TX: '6e400002-b5a3-f393-e0a9-e50e24dcca9e'
+};
+
 export const connectPrinter = async (): Promise<BluetoothDevice> => {
     if (!navigator.bluetooth) {
         throw new Error("Web Bluetooth is not supported in this browser.");
     }
 
-    const device = await navigator.bluetooth.requestDevice({
-        filters: [
-            { namePrefix: 'M' }, // M110, M02
-            { namePrefix: 'D' }, // D30
-            { namePrefix: 'Q' }, // Q30
-            { namePrefix: 'P' }, // Phomemo
-            { services: ['000018f0-0000-1000-8000-00805f9b34fb'] }, // Common service
-        ],
-        optionalServices: [
-            '000018f0-0000-1000-8000-00805f9b34fb',
-            '0000ff00-0000-1000-8000-00805f9b34fb',
-            'e7810a71-73ae-499d-8c15-faa9aef0c3f2', // Proprietary
-            '0000180f-0000-1000-8000-00805f9b34fb', // Battery
-            '0000180a-0000-1000-8000-00805f9b34fb'  // Device Information
-        ]
-    });
+    // Return cached device if still connected
+    if (cachedDevice && cachedDevice.gatt?.connected) {
+        return cachedDevice;
+    }
 
-    return device;
+    // Clean up old reference if it exists but disconnected
+    cachedDevice = null;
+
+    try {
+        const device = await navigator.bluetooth.requestDevice({
+            filters: [
+                { namePrefix: 'M' }, // M110, M02
+                { namePrefix: 'D' }, // D30
+                { namePrefix: 'Q' }, // Q30
+                { namePrefix: 'P' }, // Phomemo
+                { namePrefix: 'S' }, // S1 / Generic S-series
+                { namePrefix: 'iD' }, // iDPRT
+                { services: [PRINTER_SERVICES.HM10_UART] } // Catch HM-10 based devices
+            ],
+            optionalServices: [
+                PRINTER_SERVICES.PHOMEMO,
+                PRINTER_SERVICES.ALT_SERVICE,
+                PRINTER_SERVICES.PROPRIETARY,
+                PRINTER_SERVICES.HM10_UART,
+                PRINTER_SERVICES.NORDIC_UART,
+                PRINTER_SERVICES.BATTERY,
+                PRINTER_SERVICES.DEVICE_INFO
+            ]
+        });
+
+        // Add disconnect listener
+        device.addEventListener('gattserverdisconnected', () => {
+            console.log("Printer disconnected");
+            cachedDevice = null;
+            notifyListeners(false);
+        });
+
+        cachedDevice = device;
+        notifyListeners(true);
+        return device;
+    } catch (e) {
+        cachedDevice = null;
+        notifyListeners(false);
+        throw e;
+    }
 };
 
 export const getDeviceDetails = async (device: BluetoothDevice): Promise<Partial<PrinterInfo>> => {
@@ -34,7 +119,7 @@ export const getDeviceDetails = async (device: BluetoothDevice): Promise<Partial
 
         // Device Information Service
         try {
-            const service = await server.getPrimaryService('0000180a-0000-1000-8000-00805f9b34fb');
+            const service = await server.getPrimaryService(PRINTER_SERVICES.DEVICE_INFO);
 
             // Model Number
             try {
@@ -68,7 +153,7 @@ export const getBatteryLevel = async (device: BluetoothDevice): Promise<number |
         const server = device.gatt;
         if (!server) return null;
 
-        const batteryService = await server.getPrimaryService('0000180f-0000-1000-8000-00805f9b34fb');
+        const batteryService = await server.getPrimaryService(PRINTER_SERVICES.BATTERY);
         const batteryLevelChar = await batteryService.getCharacteristic('00002a19-0000-1000-8000-00805f9b34fb');
         const value = await batteryLevelChar.readValue();
         return value.getUint8(0);
@@ -83,15 +168,31 @@ const getWriteCharacteristic = async (device: BluetoothDevice): Promise<Bluetoot
     const server = device.gatt;
     if (!server) throw new Error("GATT Server not found");
 
-    const services = [
-        '000018f0-0000-1000-8000-00805f9b34fb',
-        '0000ff00-0000-1000-8000-00805f9b34fb',
-        'e7810a71-73ae-499d-8c15-faa9aef0c3f2'
+    // Order of services to check
+    const servicesToCheck = [
+        PRINTER_SERVICES.PHOMEMO,
+        PRINTER_SERVICES.ALT_SERVICE,
+        PRINTER_SERVICES.PROPRIETARY,
+        PRINTER_SERVICES.HM10_UART,
+        PRINTER_SERVICES.NORDIC_UART
     ];
 
-    for (const sUuid of services) {
+    // 1. Try known specific Write Characteristics first (Fast Path)
+    for (const sUuid of servicesToCheck) {
         try {
             const service = await server.getPrimaryService(sUuid);
+
+            // Check for HM-10 TX specific
+            if (sUuid === PRINTER_SERVICES.HM10_UART) {
+                try { return await service.getCharacteristic(WRITE_CHARACTERISTICS.HM10_TX); } catch(e) {}
+            }
+
+            // Check for Nordic TX specific
+            if (sUuid === PRINTER_SERVICES.NORDIC_UART) {
+                try { return await service.getCharacteristic(WRITE_CHARACTERISTICS.NORDIC_TX); } catch(e) {}
+            }
+
+            // Fallback: Generic enumeration
             const chars = await service.getCharacteristics();
             for (const c of chars) {
                 if (c.properties.write || c.properties.writeWithoutResponse) {
@@ -100,7 +201,7 @@ const getWriteCharacteristic = async (device: BluetoothDevice): Promise<Bluetoot
             }
         } catch (e) { continue; }
     }
-    throw new Error("No writeable characteristic found.");
+    throw new Error("No writeable characteristic found. Device might be incompatible.");
 }
 
 export const feedPaper = async (device: BluetoothDevice) => {
@@ -117,6 +218,7 @@ export const feedPaper = async (device: BluetoothDevice) => {
 
 export const checkPrinterStatus = async (device: BluetoothDevice): Promise<'ready' | 'paper_out' | 'cover_open' | 'unknown'> => {
     if (!device.gatt?.connected) return 'unknown';
+    // Most cheap printers don't reliably report status via standard characteristics
     return 'ready';
 };
 
@@ -143,10 +245,9 @@ export const printLabel = async (device: BluetoothDevice, canvas: HTMLCanvasElem
     const imgData = ctx.getImageData(0, 0, width, height);
     const pixels = imgData.data;
 
-    const baseThreshold = Math.max(50, Math.min(200, 50 + (settings.density * 1.5)));
+    // Software Contrast Adjustment
     let grayscale = new Float32Array(width * height);
 
-    // Convert to grayscale with ALPHA handling
     for (let i = 0; i < pixels.length / 4; i++) {
         const r = pixels[i * 4];
         const g = pixels[i * 4 + 1];
@@ -154,17 +255,27 @@ export const printLabel = async (device: BluetoothDevice, canvas: HTMLCanvasElem
         const a = pixels[i * 4 + 3];
 
         if (a < 128) {
-            grayscale[i] = 255;
+            grayscale[i] = 255; // Transparent -> White paper
         } else {
-            grayscale[i] = r * 0.299 + g * 0.587 + b * 0.114;
+            // Standard Luminance
+            let gray = r * 0.299 + g * 0.587 + b * 0.114;
+
+            // Apply Density/Contrast
+            if (settings.density !== 50) {
+                 const darkenFactor = (settings.density - 50) / 100; // -0.5 to 0.5
+                 gray = gray - (255 * darkenFactor);
+                 if (gray < 0) gray = 0;
+                 if (gray > 255) gray = 255;
+            }
+
+            grayscale[i] = gray;
         }
     }
 
-    // --- OFFSET LOGIC (Software Shift) ---
-    // Shift image data vertically to adjust print position
-    // Positive offset = Shift DOWN (add blank lines at top)
-    // Negative offset = Shift UP (crop top lines)
+    // Base Threshold for dithering - standard is 128
+    const baseThreshold = 128;
 
+    // --- OFFSET LOGIC (Software Shift) ---
     const offsetMm = settings.printOffsetMm || 0;
     const offsetPx = Math.round((offsetMm / 25.4) * 203);
 
@@ -255,7 +366,10 @@ export const printLabel = async (device: BluetoothDevice, canvas: HTMLCanvasElem
     // --- COMMAND GENERATION ---
     const initCmd = new Uint8Array([0x1B, 0x40]);
 
-    // Set Density
+    // Set Density (Hardware) - Using standard ESC/POS or Phomemo proprietary
+    // The "Complete Verification Summary" suggested 0x1F 0x11 0x24 [n]
+    // Standard ESC/POS is GS ( E ...
+    // We will trust the user provided summary for the experimental support
     const densityByte = Math.max(1, Math.min(15, Math.ceil(settings.density / 100 * 15)));
     const densityCmd = new Uint8Array([0x1F, 0x11, 0x24, densityByte]);
 
@@ -276,7 +390,7 @@ export const printLabel = async (device: BluetoothDevice, canvas: HTMLCanvasElem
 
         await writeValue(characteristic, header);
 
-        // Chunk size 60 for D30 reliability
+        // Chunk size 60 is standard for BLE MTU limits on these devices
         const CHUNK_SIZE = 60;
         for (let j = 0; j < dataPayload.length; j += CHUNK_SIZE) {
             const chunk = dataPayload.slice(j, j + CHUNK_SIZE);

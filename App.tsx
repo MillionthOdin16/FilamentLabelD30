@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Camera, Printer, RotateCcw, PenTool, Loader2, Info, Bluetooth, Ruler, History, ArrowRight, Battery, BatteryFull, BatteryLow, BatteryMedium, ExternalLink, AlertTriangle, Eye, X, Download, Upload, Image as ImageIcon, Edit3, CheckCircle2, Sparkles, Package, Layout, BarChart3, Layers } from 'lucide-react';
+import { Camera, Printer, RotateCcw, PenTool, Loader2, Info, Bluetooth, Ruler, History, ArrowRight, Battery, BatteryFull, BatteryLow, BatteryMedium, ExternalLink, AlertTriangle, Eye, X, Download, Upload, Image as ImageIcon, Edit3, CheckCircle2, Sparkles, Package, Layout, BarChart3, Layers, PlusCircle, Scan } from 'lucide-react';
 import { AppState, FilamentData, LABEL_PRESETS, LabelPreset, PrintSettings, HistoryEntry, LabelTheme, PrinterInfo, PrintJob, LabelTemplate } from './types';
 import { analyzeFilamentImage } from './services/geminiService';
-import { connectPrinter, printLabel, getBatteryLevel, getDeviceDetails, checkPrinterStatus } from './services/printerService';
+import { connectPrinter, printLabel, getBatteryLevel, getDeviceDetails, checkPrinterStatus, addConnectionListener, removeConnectionListener, getConnectedDevice } from './services/printerService';
 import CameraCapture from './components/CameraCapture';
 import LabelEditor from './components/LabelEditor';
 import LabelCanvas from './components/LabelCanvas';
@@ -11,6 +11,7 @@ import PrinterTools from './components/PrinterTools';
 import PrintStatus, { PrintStep } from './components/PrintStatus';
 import SuccessView from './components/SuccessView';
 import FilamentLibrary from './components/FilamentLibrary';
+import PrinterStatusModal from './components/PrinterStatusModal';
 import BatchGenerator from './components/BatchGenerator';
 import AnalyticsDashboard from './components/AnalyticsDashboard';
 import TemplateGallery from './components/TemplateGallery';
@@ -62,12 +63,18 @@ const App: React.FC = () => {
   const [isIframe, setIsIframe] = useState(false);
   const [showIframeWarning, setShowIframeWarning] = useState(true);
   const [showSuccess, setShowSuccess] = useState(false);
+  const [isConnected, setIsConnected] = useState(false);
+  const [showPrinterStatus, setShowPrinterStatus] = useState(false);
 
   // Batch Printing State
   const [batchQueue, setBatchQueue] = useState<PrintJob[]>([]);
   const [currentBatchIndex, setCurrentBatchIndex] = useState<number>(-1);
   const [batchCanvas, setBatchCanvas] = useState<HTMLCanvasElement | null>(null);
   const [isBatchPrinting, setIsBatchPrinting] = useState(false);
+  const [batchOverrideSize, setBatchOverrideSize] = useState<LabelPreset | null>(null);
+  const [sessionSelectedIds, setSessionSelectedIds] = useState<Set<string>>(new Set());
+  const [lastBatchQueue, setLastBatchQueue] = useState<PrintJob[] | null>(null);
+  const [lastBatchOverrideSizeId, setLastBatchOverrideSizeId] = useState<string | undefined>(undefined);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -86,6 +93,26 @@ const App: React.FC = () => {
     } catch (e) {
       setIsIframe(true);
     }
+
+    // Bluetooth Listeners
+    const listener = (connected: boolean) => {
+      setIsConnected(connected);
+      if (connected) {
+        // Auto-fetch details if reconnected
+        const device = getConnectedDevice();
+        if (device) {
+           getBatteryLevel(device).then(setBatteryLevel);
+           getDeviceDetails(device).then(setPrinterInfo);
+        }
+      } else {
+        setBatteryLevel(null);
+      }
+    };
+    addConnectionListener(listener);
+
+    return () => {
+      removeConnectionListener(listener);
+    };
   }, []);
 
   const saveToHistory = (data: FilamentData) => {
@@ -168,7 +195,7 @@ const App: React.FC = () => {
     setIsProcessing(true);
     if (!isBatchItem) {
       setPrintStep('connecting');
-      setStatusMsg('Searching for printer...');
+      setStatusMsg(isConnected ? 'Using connected printer...' : 'Searching for printer...');
       setErrorMsg(null);
       setShowSuccess(false);
     }
@@ -177,7 +204,7 @@ const App: React.FC = () => {
       const device = await connectPrinter();
 
       // Only fetch details if we don't have them or it's the first print
-      if (!printerInfo || !isBatchItem) {
+      if ((!printerInfo || !isBatchItem) && !isBatchPrinting) {
         if (!isBatchItem) {
           setPrintStep('fetching');
           setStatusMsg('Reading device information...');
@@ -271,7 +298,7 @@ const App: React.FC = () => {
         try {
           // Update status for the user
           setPrintStep('printing');
-          setStatusMsg(`Printing ${currentBatchIndex + 1}/${batchQueue.length}: ${job.data.brand} ${job.data.material}`);
+          setStatusMsg(`Printing ${currentBatchIndex + 1}/${batchQueue.length}: ${job.label.brand} ${job.label.material}`);
 
           // Print!
           await performPrint(batchCanvas, job.settings, true);
@@ -302,13 +329,52 @@ const App: React.FC = () => {
     processBatchItem();
   }, [currentBatchIndex, batchCanvas, isBatchPrinting, batchQueue]);
 
-  const handleBatchPrint = async (jobs: PrintJob[]) => {
+  const handleBatchPrint = async (jobs: PrintJob[], overrideSizeId?: string) => {
     if (jobs.length === 0) return;
+
+    // Save for retry capability
+    setLastBatchQueue(jobs);
+    setLastBatchOverrideSizeId(overrideSizeId);
+
+    if (overrideSizeId && overrideSizeId !== 'default') {
+        const preset = LABEL_PRESETS.find(p => p.id === overrideSizeId);
+        setBatchOverrideSize(preset || null);
+    } else {
+        setBatchOverrideSize(null);
+    }
+
     setBatchQueue(jobs);
     setCurrentBatchIndex(0);
     setIsBatchPrinting(true);
     setPrintStep('connecting'); // Initial status
     setStatusMsg('Starting batch print...');
+  };
+
+  const handleReprintLastBatch = () => {
+      if (lastBatchQueue) {
+          handleBatchPrint(lastBatchQueue, lastBatchOverrideSizeId);
+      }
+  };
+
+  const handleAddToBatch = () => {
+      // Add current filament to batch history locally but don't clear form
+      // Manual saveToHistory logic to get the ID
+      const historyId = Date.now().toString();
+      const newEntry: HistoryEntry = { id: historyId, timestamp: Date.now(), data: filamentData };
+      const newHistory = [newEntry, ...history].slice(0, 50); // Keep last 50
+      setHistory(newHistory);
+      localStorage.setItem('filament_history', JSON.stringify(newHistory));
+
+      // Auto-select this item for the next batch
+      setSessionSelectedIds(prev => new Set(prev).add(historyId));
+
+      // Also, visually feedback
+      setStatusMsg("Added to Batch History");
+      setPrintStep('success'); // Re-use success visual temporarily
+      setTimeout(() => {
+          setPrintStep('idle');
+          setStatusMsg('');
+      }, 1500);
   };
 
   const handleSelectTemplate = (template: LabelTemplate) => {
@@ -337,6 +403,12 @@ const App: React.FC = () => {
   const handlePrintMore = () => {
     setShowSuccess(false);
     setPrintStep('idle');
+  };
+
+  const handleScanAnother = () => {
+    setShowSuccess(false);
+    setPrintStep('idle');
+    handleStartCapture();
   };
 
   const resetFlow = () => {
@@ -387,11 +459,21 @@ const App: React.FC = () => {
                   {printerInfo.model}
                 </span>
               )}
+              {isConnected && (
+                  <span className="text-[9px] bg-green-900/40 text-green-400 px-1 rounded border border-green-800/50 flex items-center gap-1">
+                      <Bluetooth size={8} /> Connected
+                  </span>
+              )}
             </div>
           </div>
         </div>
         <div className="flex items-center gap-2">
-          {renderBattery()}
+          <button
+            onClick={() => setShowPrinterStatus(true)}
+            className="hover:scale-105 transition-transform"
+          >
+            {renderBattery()}
+          </button>
           {state !== AppState.HOME && (
             <button onClick={resetFlow} className="p-2 bg-gray-800 hover:bg-gray-700 rounded-full transition-colors text-gray-400 hover:text-white">
               <RotateCcw size={20} />
@@ -414,7 +496,7 @@ const App: React.FC = () => {
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id as Tab)}
                 className={`
-                              flex items-center gap-2 py-3 px-1 border-b-2 transition-colors whitespace-nowrap
+                              flex items-center gap-2 py-3 px-1 border-b-2 transition-colors whitespace-nowrap relative
                               ${activeTab === tab.id
                     ? 'border-cyan-500 text-cyan-400'
                     : 'border-transparent text-gray-500 hover:text-gray-300'}
@@ -422,6 +504,11 @@ const App: React.FC = () => {
               >
                 <tab.icon size={16} />
                 <span className="text-xs font-bold uppercase tracking-wider">{tab.label}</span>
+                {tab.id === 'batch' && sessionSelectedIds.size > 0 && (
+                    <span className="absolute top-1 right-[-4px] bg-cyan-600 text-white text-[9px] w-4 h-4 flex items-center justify-center rounded-full font-bold">
+                        {sessionSelectedIds.size}
+                    </span>
+                )}
               </button>
             ))}
           </div>
@@ -429,6 +516,14 @@ const App: React.FC = () => {
       )}
 
       <main className="max-w-xl mx-auto p-6 pb-40">
+        <PrinterStatusModal
+            isOpen={showPrinterStatus}
+            onClose={() => setShowPrinterStatus(false)}
+            printerInfo={printerInfo}
+            batteryLevel={batteryLevel}
+            isConnected={isConnected}
+        />
+
         {/* Iframe Warning */}
         {isIframe && showIframeWarning && state === AppState.HOME && (
           <div className="mb-6 p-4 bg-yellow-900/20 border border-yellow-700/50 rounded-xl flex items-start gap-3 relative animate-fade-in-up">
@@ -459,67 +554,100 @@ const App: React.FC = () => {
         )}
 
         {state === AppState.HOME && (
-          <div className="flex flex-col items-center space-y-12 mt-4 animate-fade-in">
-            <div className="text-center space-y-6">
-              <h2 className="text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-white via-gray-200 to-gray-500 tracking-tight">
-                Scan.<br />Label.<br />Print.
-              </h2>
-              <p className="text-gray-400 max-w-xs mx-auto text-lg">
-                The ultimate AI-powered labeling tool for your 3D printing filament.
-              </p>
+          <div className="flex flex-col space-y-6 mt-2 animate-fade-in">
 
-              <div className="flex gap-4 items-center justify-center w-full">
+            {/* Status Card */}
+            <div className="bg-gray-900 border border-gray-800 rounded-2xl p-4 flex items-center justify-between shadow-lg">
+                <div>
+                    <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                        {isConnected ? (
+                            <span className="flex items-center gap-2 text-green-400"><CheckCircle2 size={16} /> Printer Ready</span>
+                        ) : (
+                            <span className="flex items-center gap-2 text-gray-400"><Printer size={16} /> Printer Disconnected</span>
+                        )}
+                    </h3>
+                    <p className="text-xs text-gray-500 mt-1">
+                        {printerInfo?.model || 'No device connected'} {batteryLevel !== null && `• ${batteryLevel}% Battery`}
+                    </p>
+                </div>
+                <button
+                    onClick={() => { if (!isConnected) connectPrinter().catch(console.error); }}
+                    className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all ${isConnected ? 'bg-green-900/20 text-green-400 cursor-default' : 'bg-cyan-600 hover:bg-cyan-500 text-white'}`}
+                >
+                    {isConnected ? 'Connected' : 'Connect'}
+                </button>
+            </div>
+
+            {/* Quick Actions Grid */}
+            <div className="grid grid-cols-2 gap-3">
                 <button
                   onClick={handleStartCapture}
-                  className="group relative flex items-center justify-center w-48 h-48 rounded-3xl bg-gray-900 border border-gray-800 hover:border-cyan-500/50 transition-all duration-300 shadow-2xl hover:shadow-cyan-900/20"
+                  className="col-span-2 group relative flex items-center justify-between p-6 rounded-3xl bg-gradient-to-br from-gray-900 to-gray-800 border border-gray-800 hover:border-cyan-500/50 transition-all duration-300 shadow-xl overflow-hidden"
                 >
-                  <div className="absolute inset-0 rounded-3xl bg-cyan-500/5 group-hover:bg-cyan-500/10 transition-all blur-xl"></div>
-                  <div className="flex flex-col items-center space-y-3 relative z-10">
-                    <Camera size={40} className="text-cyan-400 group-hover:scale-110 transition-transform duration-300" />
-                    <span className="font-bold tracking-widest text-xs text-gray-300 group-hover:text-white">CAMERA</span>
+                  <div className="absolute inset-0 bg-cyan-500/5 group-hover:bg-cyan-500/10 transition-all"></div>
+                  <div className="relative z-10 flex flex-col items-start gap-1">
+                    <span className="text-2xl font-black text-white">Scan Label</span>
+                    <span className="text-xs text-gray-400">Identify filament via camera</span>
+                  </div>
+                  <div className="w-12 h-12 bg-cyan-500/20 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform">
+                    <Camera size={24} className="text-cyan-400" />
                   </div>
                 </button>
 
-                <div className="flex flex-col items-center justify-center gap-2">
-                  <input
-                    type="file"
-                    ref={fileInputRef}
-                    accept="image/*"
-                    className="hidden"
-                    onChange={handleFileUpload}
-                  />
-                  <button
-                    onClick={triggerFileUpload}
-                    className="group w-24 h-24 rounded-2xl bg-gray-900 border border-gray-800 hover:border-gray-600 transition-all duration-300 flex flex-col items-center justify-center gap-2"
-                  >
-                    <ImageIcon size={24} className="text-gray-500 group-hover:text-cyan-400 transition-colors" />
-                    <span className="text-[10px] font-bold text-gray-500 uppercase">Gallery</span>
-                  </button>
-                  <button
+                <button
                     onClick={handleManualEntry}
-                    className="group w-24 h-16 rounded-2xl bg-gray-900 border border-gray-800 hover:border-cyan-600 transition-all duration-300 flex flex-col items-center justify-center gap-1"
-                  >
-                    <Edit3 size={18} className="text-gray-500 group-hover:text-cyan-400 transition-colors" />
-                    <span className="text-[10px] font-bold text-gray-500 group-hover:text-cyan-400 uppercase">Manual</span>
-                  </button>
-                </div>
-              </div>
+                    className="p-4 rounded-2xl bg-gray-900 border border-gray-800 hover:bg-gray-800 transition-all flex flex-col gap-2 items-start"
+                >
+                    <div className="w-8 h-8 bg-gray-800 rounded-lg flex items-center justify-center">
+                        <Edit3 size={16} className="text-cyan-400" />
+                    </div>
+                    <span className="font-bold text-sm text-gray-200">Manual Entry</span>
+                </button>
 
+                <div className="relative">
+                    <input
+                        type="file"
+                        ref={fileInputRef}
+                        accept="image/*"
+                        className="hidden"
+                        onChange={handleFileUpload}
+                    />
+                    <button
+                        onClick={triggerFileUpload}
+                        className="w-full h-full p-4 rounded-2xl bg-gray-900 border border-gray-800 hover:bg-gray-800 transition-all flex flex-col gap-2 items-start"
+                    >
+                        <div className="w-8 h-8 bg-gray-800 rounded-lg flex items-center justify-center">
+                            <ImageIcon size={16} className="text-purple-400" />
+                        </div>
+                        <span className="font-bold text-sm text-gray-200">From Gallery</span>
+                    </button>
+                </div>
             </div>
 
-            {/* Filament Library */}
-            {history.length > 0 && (
-              <FilamentLibrary
-                history={history}
-                onSelect={loadFromHistory}
-                onDelete={deleteFromHistory}
-                maxDisplay={4}
-              />
-            )}
+            {/* Recent Activity */}
+            <div className="space-y-3 pt-2">
+                <div className="flex items-center justify-between px-1">
+                    <h3 className="text-xs font-bold uppercase tracking-wider text-gray-500">Recent Labels</h3>
+                    {history.length > 0 && (
+                        <button onClick={() => { setActiveTab('batch'); setState(AppState.EDITING); }} className="text-xs text-cyan-400 hover:text-cyan-300">
+                            View All
+                        </button>
+                    )}
+                </div>
 
-            <div className="text-xs text-gray-600 flex items-center gap-2 pt-8">
-              <Bluetooth size={14} />
-              <span>Supports Phomemo M110, M02, D30, Q30</span>
+                {history.length > 0 ? (
+                    <FilamentLibrary
+                        history={history}
+                        onSelect={loadFromHistory}
+                        onDelete={deleteFromHistory}
+                        maxDisplay={3}
+                    />
+                ) : (
+                    <div className="text-center py-8 bg-gray-900/50 rounded-2xl border border-dashed border-gray-800">
+                        <p className="text-gray-500 text-xs">No recent labels found.</p>
+                        <p className="text-gray-600 text-[10px] mt-1">Scan your first spool to get started!</p>
+                    </div>
+                )}
             </div>
           </div>
         )}
@@ -594,6 +722,16 @@ const App: React.FC = () => {
                     onConfirm={() => { }}
                     onDownload={handleDownloadPng}
                   />
+
+                  {/* Add To Batch Button */}
+                   <button
+                    onClick={handleAddToBatch}
+                    className="w-full mt-4 py-3 bg-gray-800 border border-gray-700 hover:bg-gray-700 text-white font-bold rounded-xl transition-colors flex items-center justify-center gap-2"
+                  >
+                    <PlusCircle size={20} className="text-cyan-400" />
+                    <span>Add to Batch Queue</span>
+                  </button>
+
                 </section>
 
                 <PrinterTools settings={printSettings} onSettingsChange={setPrintSettings} />
@@ -602,7 +740,13 @@ const App: React.FC = () => {
 
             {/* --- BATCH TAB --- */}
             {activeTab === 'batch' && (
-              <BatchGenerator history={history} onPrintBatch={handleBatchPrint} />
+              <BatchGenerator
+                history={history}
+                onPrintBatch={handleBatchPrint}
+                initialSelectedIds={sessionSelectedIds}
+                onSelectionChange={setSessionSelectedIds}
+                onRequestScan={handleStartCapture}
+              />
             )}
 
             {/* --- TEMPLATES TAB --- */}
@@ -628,6 +772,33 @@ const App: React.FC = () => {
             onDownload={handleDownloadPng}
           />
         )}
+
+        {/* Retry/Reprint Batch Action (Only visible after batch completion) */}
+        {showSuccess && state === AppState.PRINTING_SUCCESS && lastBatchQueue && !isBatchPrinting && (
+             <div className="fixed bottom-36 left-1/2 transform -translate-x-1/2 z-50">
+                 <button
+                    onClick={handleReprintLastBatch}
+                    className="bg-gray-800 border border-gray-700 text-gray-300 px-4 py-2 rounded-full shadow-lg flex items-center gap-2 hover:bg-gray-700 hover:text-white transition-colors text-xs font-bold uppercase"
+                >
+                    <RotateCcw size={14} />
+                    <span>Reprint Batch</span>
+                </button>
+            </div>
+        )}
+
+        {/* Custom Scan Another Action in Success View */}
+        {showSuccess && state === AppState.PRINTING_SUCCESS && (
+            <div className="fixed bottom-24 left-1/2 transform -translate-x-1/2 z-50">
+                 <button
+                    onClick={handleScanAnother}
+                    className="bg-gray-800 border border-gray-700 text-white px-6 py-3 rounded-full shadow-xl flex items-center gap-2 hover:bg-gray-700 transition-colors"
+                >
+                    <Scan size={18} className="text-cyan-400" />
+                    <span className="font-bold text-sm">Scan Another</span>
+                </button>
+            </div>
+        )}
+
       </main>
 
       {(state === AppState.EDITING || state === AppState.PRINTING_SUCCESS) && !showSuccess && activeTab === 'editor' && (
@@ -677,11 +848,14 @@ const App: React.FC = () => {
                 onClick={handlePrint}
                 disabled={isProcessing}
                 className={`w-full py-4 rounded-xl shadow-2xl font-bold text-lg flex items-center justify-center gap-3 transition-all transform active:scale-95 glow-cyan
-                  ${isProcessing ? 'bg-gray-800 text-gray-500 cursor-not-allowed' : 'bg-gradient-to-r from-cyan-500 to-blue-600 text-white hover:from-cyan-400 hover:to-blue-500'}
+                  ${isProcessing ? 'bg-gray-800 text-gray-500 cursor-not-allowed' :
+                    (filamentData.confidence !== undefined && filamentData.confidence < 80)
+                    ? 'bg-gradient-to-r from-orange-500 to-red-600 text-white hover:from-orange-400 hover:to-red-500'
+                    : 'bg-gradient-to-r from-cyan-500 to-blue-600 text-white hover:from-cyan-400 hover:to-blue-500'}
                 `}
               >
-                <Printer size={24} />
-                PRINT LABEL
+                {(filamentData.confidence !== undefined && filamentData.confidence < 80) ? <AlertTriangle size={24} /> : <Printer size={24} />}
+                {(filamentData.confidence !== undefined && filamentData.confidence < 80 && isConnected) ? 'VERIFY & PRINT' : (isConnected ? 'PRINT LABEL' : 'CONNECT & PRINT')}
                 {printSettings.copies > 1 && (
                   <span className="bg-white/20 px-2 py-0.5 rounded-full text-sm">×{printSettings.copies}</span>
                 )}
@@ -714,8 +888,8 @@ const App: React.FC = () => {
 
             <div className="bg-gray-800/50 p-4 rounded-lg text-left">
               <p className="text-xs text-gray-500 uppercase font-bold mb-1">Current Label</p>
-              <p className="text-white font-bold">{batchQueue[currentBatchIndex]?.data.brand}</p>
-              <p className="text-cyan-400 text-sm">{batchQueue[currentBatchIndex]?.data.material}</p>
+              <p className="text-white font-bold">{batchQueue[currentBatchIndex]?.label.brand}</p>
+              <p className="text-cyan-400 text-sm">{batchQueue[currentBatchIndex]?.label.material}</p>
             </div>
 
             <button
@@ -733,10 +907,10 @@ const App: React.FC = () => {
         {isBatchPrinting && currentBatchIndex >= 0 && batchQueue[currentBatchIndex] && (
           <LabelCanvas
             key={`batch-${currentBatchIndex}`} // Force re-mount
-            data={batchQueue[currentBatchIndex].data}
+            data={batchQueue[currentBatchIndex].label}
             settings={batchQueue[currentBatchIndex].settings}
-            widthMm={selectedLabel.widthMm}
-            heightMm={selectedLabel.heightMm}
+            widthMm={batchOverrideSize ? batchOverrideSize.widthMm : selectedLabel.widthMm}
+            heightMm={batchOverrideSize ? batchOverrideSize.heightMm : selectedLabel.heightMm}
             onCanvasReady={setBatchCanvas}
             scale={2} // High res for print
           />
