@@ -1,15 +1,24 @@
 import React, { useState } from 'react';
-import { HistoryEntry, FilamentData, PrintJob } from '../types';
+import { HistoryEntry, FilamentData, PrintJob, LABEL_PRESETS, LabelPreset } from '../types';
 import { generateBatchJobs, BatchGenerationOptions, generateBatchReport } from '../services/batchGeneratorService';
-import { Check, Printer, Settings, AlertCircle, FileText, Clock, ArrowRight } from 'lucide-react';
+import { Check, Printer, Settings, AlertCircle, FileText, Clock, ArrowRight, Ruler } from 'lucide-react';
+import LabelThumbnail from './LabelThumbnail';
 
 interface BatchGeneratorProps {
     history: HistoryEntry[];
-    onPrintBatch: (jobs: PrintJob[]) => Promise<void>;
+    onPrintBatch: (jobs: PrintJob[], overrideSizeId?: string) => Promise<void>;
+    initialSelectedIds?: Set<string>;
+    onSelectionChange?: (ids: Set<string>) => void;
+    onRequestScan?: () => void;
 }
 
-const BatchGenerator: React.FC<BatchGeneratorProps> = ({ history, onPrintBatch }) => {
-    const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+const BatchGenerator: React.FC<BatchGeneratorProps> = ({ history, onPrintBatch, initialSelectedIds, onSelectionChange, onRequestScan }) => {
+    const [localSelectedIds, setLocalSelectedIds] = useState<Set<string>>(new Set());
+
+    // Use prop if available, otherwise local state
+    const selectedIds = initialSelectedIds || localSelectedIds;
+    const setSelectedIds = onSelectionChange || setLocalSelectedIds;
+
     const [options, setOptions] = useState<BatchGenerationOptions>({
         optimizeOrder: true,
         autoRecommendSettings: true,
@@ -17,6 +26,7 @@ const BatchGenerator: React.FC<BatchGeneratorProps> = ({ history, onPrintBatch }
         addTimeStamps: true,
         skipDuplicates: false
     });
+    const [overrideSize, setOverrideSize] = useState<string>('default'); // 'default' or preset ID
     const [generatedJobs, setGeneratedJobs] = useState<PrintJob[]>([]);
     const [report, setReport] = useState<string>('');
     const [isPrinting, setIsPrinting] = useState(false);
@@ -33,6 +43,18 @@ const BatchGenerator: React.FC<BatchGeneratorProps> = ({ history, onPrintBatch }
         else setSelectedIds(new Set(history.map(h => h.id)));
     };
 
+    const selectToday = () => {
+        const today = new Date().setHours(0,0,0,0);
+        const todayIds = history
+            .filter(h => new Date(h.timestamp).setHours(0,0,0,0) === today)
+            .map(h => h.id);
+
+        // Add to existing selection or replace? Let's add for better UX
+        const newSet = new Set(selectedIds);
+        todayIds.forEach(id => newSet.add(id));
+        setSelectedIds(newSet);
+    };
+
     const handleGenerate = () => {
         const selectedFilaments = history
             .filter(h => selectedIds.has(h.id))
@@ -41,21 +63,27 @@ const BatchGenerator: React.FC<BatchGeneratorProps> = ({ history, onPrintBatch }
         if (selectedFilaments.length === 0) return;
 
         const result = generateBatchJobs(selectedFilaments, history, options);
+
         setGeneratedJobs(result.jobs);
         setReport(generateBatchReport(result));
     };
 
     const handlePrint = async () => {
         if (generatedJobs.length === 0) return;
+
         setIsPrinting(true);
         try {
-            await onPrintBatch(generatedJobs);
+            // Pass the generated jobs AND the optional override size to App.tsx
+            await onPrintBatch(generatedJobs, overrideSize);
         } catch (e) {
             console.error("Batch print failed", e);
         } finally {
             setIsPrinting(false);
         }
     };
+
+    // Helper to find preset name
+    const getPresetName = (id: string) => LABEL_PRESETS.find(p => p.id === id)?.name || id;
 
     return (
         <div className="space-y-6">
@@ -64,48 +92,90 @@ const BatchGenerator: React.FC<BatchGeneratorProps> = ({ history, onPrintBatch }
                     <h2 className="text-lg font-bold text-white flex items-center gap-2">
                         <Printer className="text-cyan-400" /> Batch Generator
                     </h2>
-                    <button
-                        onClick={selectAll}
-                        className="text-xs text-cyan-400 hover:text-cyan-300 font-bold uppercase"
-                    >
-                        {selectedIds.size === history.length ? 'Deselect All' : 'Select All'}
-                    </button>
+                    <div className="flex gap-3">
+                        <button
+                            onClick={selectToday}
+                            className="text-xs text-cyan-400 hover:text-cyan-300 font-bold uppercase"
+                        >
+                            Select Today
+                        </button>
+                        <button
+                            onClick={selectAll}
+                            className="text-xs text-cyan-400 hover:text-cyan-300 font-bold uppercase"
+                        >
+                            {selectedIds.size === history.length && history.length > 0 ? 'Deselect All' : 'Select All'}
+                        </button>
+                    </div>
                 </div>
 
                 {/* History Selection List */}
                 <div className="max-h-60 overflow-y-auto space-y-2 mb-4 pr-2 custom-scrollbar">
                     {history.length === 0 ? (
-                        <div className="text-center text-gray-500 py-8 text-sm">No history available to select from.</div>
+                        <div className="text-center text-gray-500 py-8 text-sm flex flex-col items-center gap-3">
+                            <p>No history available to select from.</p>
+                            {onRequestScan && (
+                                <button
+                                    onClick={onRequestScan}
+                                    className="bg-gray-800 hover:bg-gray-700 text-cyan-400 px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all"
+                                >
+                                    Scan New Item
+                                </button>
+                            )}
+                        </div>
                     ) : (
                         history.map(entry => (
                             <div
                                 key={entry.id}
                                 onClick={() => toggleSelection(entry.id)}
-                                className={`p-3 rounded-lg border cursor-pointer transition-all flex items-center gap-3
-                  ${selectedIds.has(entry.id)
+                                className={`p-2 rounded-lg border cursor-pointer transition-all flex items-center gap-3 relative overflow-hidden group
+                                    ${selectedIds.has(entry.id)
                                         ? 'bg-cyan-900/20 border-cyan-500/50'
                                         : 'bg-gray-800/50 border-gray-700 hover:bg-gray-800'}
-                `}
+                                `}
                             >
-                                <div className={`w-4 h-4 rounded border flex items-center justify-center
-                  ${selectedIds.has(entry.id) ? 'bg-cyan-500 border-cyan-500' : 'border-gray-500'}
-                `}>
-                                    {selectedIds.has(entry.id) && <Check size={10} className="text-black" />}
+                                {/* Selection Checkbox */}
+                                <div className={`w-5 h-5 rounded flex items-center justify-center flex-shrink-0 transition-all z-10
+                                    ${selectedIds.has(entry.id) ? 'bg-cyan-500 border-none' : 'border-2 border-gray-600 bg-gray-900/50'}
+                                `}>
+                                    {selectedIds.has(entry.id) && <Check size={14} className="text-black stroke-[3px]" />}
                                 </div>
-                                <div className="flex-1">
-                                    <div className="flex justify-between">
-                                        <span className="font-bold text-sm text-white">{entry.data.brand}</span>
-                                        <span className="text-xs text-gray-400">{new Date(entry.timestamp).toLocaleDateString()}</span>
+
+                                {/* Thumbnail */}
+                                <div className="flex-shrink-0">
+                                    <LabelThumbnail data={entry.data} size={48} />
+                                </div>
+
+                                <div className="flex-1 min-w-0">
+                                    <div className="flex justify-between items-baseline">
+                                        <span className="font-bold text-sm text-white truncate">{entry.data.brand}</span>
+                                        <span className="text-[10px] text-gray-500 flex-shrink-0">{new Date(entry.timestamp).toLocaleDateString()}</span>
                                     </div>
-                                    <div className="flex items-center gap-2 text-xs text-gray-400">
-                                        <span className="font-mono text-cyan-300">{entry.data.material}</span>
-                                        <span>•</span>
-                                        <span>{entry.data.colorName}</span>
+                                    <div className="flex items-center gap-2 text-xs text-gray-400 mt-0.5">
+                                        <span className="font-black text-cyan-400 bg-cyan-900/20 px-1 rounded">{entry.data.material}</span>
+                                        <span className="truncate">{entry.data.colorName}</span>
                                     </div>
                                 </div>
                             </div>
                         ))
                     )}
+                </div>
+
+                 {/* Global Settings Override */}
+                <div className="mb-4 p-3 bg-gray-800/50 rounded-lg border border-gray-700">
+                    <div className="flex items-center gap-2 mb-2 text-cyan-400">
+                        <Ruler size={14} />
+                        <span className="text-xs font-bold uppercase">Batch Label Size</span>
+                    </div>
+                     <select
+                        value={overrideSize}
+                        onChange={(e) => setOverrideSize(e.target.value)}
+                        className="w-full bg-gray-700 text-white text-xs rounded p-2 border border-gray-600 outline-none focus:border-cyan-500"
+                    >
+                        <option value="default">Use Auto Recommendation</option>
+                        {LABEL_PRESETS.map(p => (
+                             <option key={p.id} value={p.id}>{p.name} ({p.widthMm}x{p.heightMm}mm)</option>
+                        ))}
+                    </select>
                 </div>
 
                 {/* Options */}
@@ -117,14 +187,15 @@ const BatchGenerator: React.FC<BatchGeneratorProps> = ({ history, onPrintBatch }
                             onChange={e => setOptions({ ...options, optimizeOrder: e.target.checked })}
                             className="rounded bg-gray-700 border-gray-600 text-cyan-500 focus:ring-0"
                         />
-                        Optimize Order (Save Paper)
+                        Optimize Order
                     </label>
                     <label className="flex items-center gap-2 text-xs text-gray-300 cursor-pointer">
                         <input
                             type="checkbox"
                             checked={options.autoRecommendSettings}
+                            disabled={overrideSize !== 'default'}
                             onChange={e => setOptions({ ...options, autoRecommendSettings: e.target.checked })}
-                            className="rounded bg-gray-700 border-gray-600 text-cyan-500 focus:ring-0"
+                            className={`rounded bg-gray-700 border-gray-600 text-cyan-500 focus:ring-0 ${overrideSize !== 'default' ? 'opacity-50' : ''}`}
                         />
                         AI Smart Settings
                     </label>
@@ -164,6 +235,13 @@ const BatchGenerator: React.FC<BatchGeneratorProps> = ({ history, onPrintBatch }
                     <pre className="bg-gray-950 p-3 rounded-lg text-[10px] text-gray-400 font-mono overflow-x-auto mb-4 border border-gray-800">
                         {report}
                     </pre>
+
+                    {overrideSize !== 'default' && (
+                        <div className="mb-4 p-2 bg-yellow-900/20 border border-yellow-700/50 rounded flex items-center gap-2 text-xs text-yellow-500">
+                            <AlertCircle size={14} />
+                            <span>Ensure printer is loaded with <b>{getPresetName(overrideSize)}</b> labels.</span>
+                        </div>
+                    )}
 
                     <button
                         onClick={handlePrint}
