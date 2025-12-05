@@ -19,6 +19,7 @@ export interface FilamentData {
   openDate?: string; // ISO date when spool was opened
   purchaseDate?: string; // ISO date when purchased
   remainingWeight?: string; // e.g. "750g" or "75%"
+  customQrCode?: string; // Optional custom QR data overrides default
 }
 
 // Common material presets with typical print settings
@@ -73,6 +74,12 @@ export interface PrintSettings {
   labelType?: 'gap' | 'continuous' | 'mark';
   autoCalibrate?: boolean;
   printOffsetMm?: number;
+  includeRuler?: boolean;
+}
+
+export interface AdvancedPrintSettings extends PrintSettings {
+    justification?: 'left' | 'center' | 'right';
+    qualityMode?: 'draft' | 'normal' | 'best';
 }
 
 export interface HistoryEntry {

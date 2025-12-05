@@ -105,7 +105,7 @@ const FilamentLibrary: React.FC<FilamentLibraryProps> = ({
       {/* Material Type Pills (when not searching) */}
       {!searchQuery && Object.keys(groupedByMaterial).length > 1 && (
         <div className="flex flex-wrap gap-1">
-          {Object.entries(groupedByMaterial).slice(0, MAX_MATERIAL_BADGES).map(([material, entries]) => (
+          {Object.entries(groupedByMaterial).slice(0, MAX_MATERIAL_BADGES).map(([material, entries]: [string, HistoryEntry[]]) => (
             <span 
               key={material}
               className={`text-[9px] px-2 py-0.5 rounded-full border ${getMaterialBadgeColor(material)}`}
