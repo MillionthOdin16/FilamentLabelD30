@@ -19,7 +19,8 @@ const LabelCanvas: React.FC<LabelCanvasProps> = ({
   settings = {
     copies: 1, invert: false, includeQr: false, density: 100, theme: LabelTheme.SWATCH,
     marginMm: 2,
-    visibleFields: { brand: true, weight: true, notes: true, date: false, source: false }
+    visibleFields: { brand: true, weight: true, notes: true, date: false, source: false },
+    includeRuler: false
   },
   widthMm,
   heightMm,
@@ -233,7 +234,9 @@ const LabelCanvas: React.FC<LabelCanvasProps> = ({
 
       // Brand & Material Intelligence
       const isPremiumBrand = (brand: string): boolean => {
-        const premium = ['Polymaker', 'Prusament', 'Bambu Lab', 'eSun', 'Hatchbox', 'Overture', 'MatterHackers', '3DXTech', 'Atomic'];
+        // Only return true for extremely well known premium brands to avoid clutter
+        const premium = ['Polymaker', 'Prusament', 'Bambu', 'Atomic', 'Proto-pasta'];
+        return premium.some(p => brand.toLowerCase().includes(p.toLowerCase()));
         return premium.some(p => brand.toLowerCase().includes(p.toLowerCase()));
       };
 
@@ -258,7 +261,8 @@ const LabelCanvas: React.FC<LabelCanvasProps> = ({
       let qrImg: HTMLImageElement | null = null;
       if (shouldQr) {
         try {
-          const qrData = `${data.brand}|${data.material}|${data.minTemp}-${data.maxTemp}`;
+          // Use custom QR code if provided, otherwise default format
+          const qrData = data.customQrCode || `${data.brand}|${data.material}|${data.minTemp}-${data.maxTemp}`;
           const url = await QRCode.toDataURL(qrData, {
             margin: 0,
             errorCorrectionLevel: 'M',
@@ -420,16 +424,24 @@ const LabelCanvas: React.FC<LabelCanvasProps> = ({
         const brandTextX = premium ? startX + (20 * s) : startX + (12 * s);
         drawTextFit(data.brand.toUpperCase(), brandTextX, startY, contentW - (brandTextX - startX) - (12 * s), brandH, 'bold', 28 * s, 'sans-serif', fg, 'left', 'middle');
 
-        // Weight badge - top right
+        // Weight badge - top right (OR DATE if enabled)
         const weightBadgeW = 80 * s;
         ctx.fillStyle = settings.invert ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.06)';
         ctx.beginPath();
         ctx.roundRect(startX + contentW - weightBadgeW, startY, weightBadgeW, brandH, 6 * s);
         ctx.fill();
 
-        const wIconS = brandH * 0.5;
-        drawIcon('weight', startX + contentW - weightBadgeW + (8 * s), startY + (brandH - wIconS) / 2, wIconS, fg);
-        drawTextFit(data.weight, startX + contentW - weightBadgeW + wIconS + (12 * s), startY, weightBadgeW - wIconS - (20 * s), brandH, 'bold', 22 * s, 'sans-serif', fg, 'right', 'middle');
+        if (settings.visibleFields.date && data.openDate) {
+           // SHOW DATE INSTEAD OF WEIGHT
+           const dateStr = new Date(data.openDate).toLocaleDateString(undefined, { month: 'numeric', year: '2-digit' });
+           drawIcon('time', startX + contentW - weightBadgeW + (8 * s), startY + (brandH - (brandH * 0.5)) / 2, brandH * 0.5, fg);
+           drawTextFit(dateStr, startX + contentW - weightBadgeW + (brandH * 0.5) + (12 * s), startY, weightBadgeW - (brandH * 0.5) - (20 * s), brandH, 'bold', 20 * s, 'monospace', fg, 'right', 'middle');
+        } else {
+           // SHOW WEIGHT
+           const wIconS = brandH * 0.5;
+           drawIcon('weight', startX + contentW - weightBadgeW + (8 * s), startY + (brandH - wIconS) / 2, wIconS, fg);
+           drawTextFit(data.weight, startX + contentW - weightBadgeW + wIconS + (12 * s), startY, weightBadgeW - wIconS - (20 * s), brandH, 'bold', 22 * s, 'sans-serif', fg, 'right', 'middle');
+        }
 
         // MATERIAL - Large and prominent with specialty icon
         const matY = startY + brandH + (15 * s);
@@ -836,6 +848,41 @@ const LabelCanvas: React.FC<LabelCanvasProps> = ({
         case LabelTheme.MAINTENANCE: renderMaintenance(); break;
         case LabelTheme.MINIMAL: renderMinimal(); break;
         default: renderModern();
+      }
+
+      // --- RULER OVERLAY ---
+      if (settings.includeRuler) {
+          const rulerX = width - (2 * MM_TO_PX); // 2mm from right
+          ctx.beginPath();
+          ctx.strokeStyle = fg;
+          ctx.lineWidth = 1 * s;
+          ctx.moveTo(rulerX, 0);
+          ctx.lineTo(rulerX, height);
+          ctx.stroke();
+
+          // Draw ticks
+          for (let i = 0; i <= heightMm; i++) {
+              const y = i * MM_TO_PX;
+              // Skip 0 and end to avoid clutter
+              if (y < 2 || y > height - 2) continue;
+
+              const isCm = i % 10 === 0;
+              const len = isCm ? (6 * s) : (3 * s); // Tick length
+
+              ctx.beginPath();
+              ctx.moveTo(rulerX, y);
+              ctx.lineTo(rulerX - len, y);
+              ctx.stroke();
+
+              if (isCm && i > 0 && i < heightMm) {
+                  // Draw text slightly offset
+                  ctx.font = `${8 * s}px sans-serif`;
+                  ctx.textAlign = 'right';
+                  ctx.textBaseline = 'middle';
+                  ctx.fillStyle = fg;
+                  ctx.fillText(i.toString(), rulerX - len - (2 * s), y);
+              }
+          }
       }
 
       if (onCanvasReady) {
