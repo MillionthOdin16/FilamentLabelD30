@@ -133,8 +133,13 @@ export const generateAnalytics = (history: HistoryEntry[]): PrintAnalytics => {
     // Calculate weekly average
     const oldestTimestamp = Math.min(...history.map(h => h.timestamp));
     const newestTimestamp = Math.max(...history.map(h => h.timestamp));
-    const weeksDiff = (newestTimestamp - oldestTimestamp) / (7 * 24 * 60 * 60 * 1000);
-    const averageLabelsPerWeek = weeksDiff > 0 ? history.length / weeksDiff : history.length;
+
+    // Ensure at least one week is used as the divisor to prevent inflated numbers for short history
+    // (e.g., 3 labels in 5 minutes shouldn't result in 10,000 labels/week)
+    const rawWeeksDiff = (newestTimestamp - oldestTimestamp) / (7 * 24 * 60 * 60 * 1000);
+    const weeksDiff = Math.max(1, rawWeeksDiff);
+
+    const averageLabelsPerWeek = history.length / weeksDiff;
 
     const insights = generateInsights(history, materialMap, brandMap, colorMap);
 
