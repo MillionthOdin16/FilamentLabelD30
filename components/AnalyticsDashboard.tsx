@@ -1,25 +1,46 @@
 import React, { useState, useMemo } from 'react';
 import { HistoryEntry } from '../types';
 import { generateAnalytics, searchHistory, SearchFilters } from '../services/analyticsService';
-import { BarChart3, PieChart, Search, Filter, TrendingUp, AlertTriangle, Sparkles, Calendar } from 'lucide-react';
+import { BarChart3, PieChart, Search, Filter, TrendingUp, AlertTriangle, Sparkles, Calendar, Download } from 'lucide-react';
+import { useToast } from './ToastProvider';
 
 interface AnalyticsDashboardProps {
     history: HistoryEntry[];
 }
 
 const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ history }) => {
+    const { success } = useToast();
     const [query, setQuery] = useState('');
     const [filters, setFilters] = useState<SearchFilters>({});
 
     const analytics = useMemo(() => generateAnalytics(history), [history]);
     const searchResults = useMemo(() => searchHistory(history, query, filters), [history, query, filters]);
 
+    const handleExport = () => {
+        const csvHeader = 'Date,Brand,Material,Color,Weight,MinTemp,MaxTemp,Notes\n';
+        const csvRows = history.map(h => {
+            const d = h.data;
+            const date = new Date(h.timestamp).toISOString().split('T')[0];
+            const notes = d.notes ? `"${d.notes.replace(/"/g, '""')}"` : '';
+            return `${date},${d.brand},${d.material},${d.colorName},${d.weight},${d.minTemp},${d.maxTemp},${notes}`;
+        }).join('\n');
+
+        const blob = new Blob([csvHeader + csvRows], { type: 'text/csv' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `filament-history-${new Date().toISOString().split('T')[0]}.csv`;
+        a.click();
+        URL.revokeObjectURL(url);
+        success("Exported History", "CSV file downloaded");
+    };
+
     const renderBarChart = (data: Map<string, number>, title: string, color: string) => {
         const max = Math.max(...Array.from(data.values()));
         const sorted = Array.from(data.entries()).sort((a, b) => b[1] - a[1]).slice(0, 5);
 
         return (
-            <div className="bg-gray-800/50 p-4 rounded-xl border border-gray-700">
+            <div className="bg-gray-800/50 p-4 rounded-xl border border-gray-700 shadow-lg hover:border-gray-600 transition-colors">
                 <h3 className="text-xs font-bold uppercase text-gray-400 mb-3 flex items-center gap-2">
                     <BarChart3 size={14} /> {title}
                 </h3>
@@ -29,7 +50,7 @@ const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ history }) => {
                             <span className="w-20 truncate text-gray-300 font-medium">{label}</span>
                             <div className="flex-1 h-2 bg-gray-700 rounded-full overflow-hidden">
                                 <div
-                                    className={`h-full rounded-full ${color}`}
+                                    className={`h-full rounded-full ${color} transition-all duration-1000 ease-out`}
                                     style={{ width: `${(count / max) * 100}%` }}
                                 />
                             </div>
@@ -42,7 +63,7 @@ const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ history }) => {
     };
 
     return (
-        <div className="space-y-6">
+        <div className="space-y-6 animate-fade-in-up">
 
             {/* Key Metrics Cards */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -102,6 +123,13 @@ const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ history }) => {
                     </div>
                     <button className="p-2 bg-gray-800 hover:bg-gray-700 rounded-lg text-gray-400">
                         <Filter size={18} />
+                    </button>
+                    <button
+                        onClick={handleExport}
+                        className="p-2 bg-gray-800 hover:bg-gray-700 rounded-lg text-cyan-400"
+                        title="Export CSV"
+                    >
+                        <Download size={18} />
                     </button>
                 </div>
 

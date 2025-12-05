@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { LabelTemplate } from '../types';
 import { PREMIUM_TEMPLATES, downloadTemplatePack, uploadTemplatePack, filterTemplates } from '../services/templateService';
 import { Layout, Download, Upload, Search, Tag, Star, CheckCircle } from 'lucide-react';
+import { useToast } from './ToastProvider';
 
 interface TemplateGalleryProps {
     onSelectTemplate: (template: LabelTemplate) => void;
@@ -9,6 +10,7 @@ interface TemplateGalleryProps {
 }
 
 const TemplateGallery: React.FC<TemplateGalleryProps> = ({ onSelectTemplate, currentTemplateId }) => {
+    const { success, error } = useToast();
     const [templates, setTemplates] = useState<LabelTemplate[]>(PREMIUM_TEMPLATES);
     const [category, setCategory] = useState<string>('all');
     const [search, setSearch] = useState('');
@@ -22,10 +24,10 @@ const TemplateGallery: React.FC<TemplateGalleryProps> = ({ onSelectTemplate, cur
         try {
             const imported = await uploadTemplatePack();
             setTemplates(prev => [...prev, ...imported]);
-            alert(`Imported ${imported.length} templates!`);
+            success(`Imported ${imported.length} templates!`);
         } catch (e) {
             console.error(e);
-            alert('Failed to import templates');
+            error('Failed to import templates');
         }
     };
 
