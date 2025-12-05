@@ -32,6 +32,8 @@ The JSON object must have the following keys:
 Do not wrap the output in markdown blocks. Return only the raw JSON string.
 `;
 
+const MAX_RETRIES = 2;
+
 export const analyzeFilamentImage = async (base64Image: string): Promise<FilamentData> => {
   const apiKey = process.env.API_KEY;
   if (!apiKey) {
@@ -39,54 +41,73 @@ export const analyzeFilamentImage = async (base64Image: string): Promise<Filamen
   }
 
   const ai = new GoogleGenAI({ apiKey });
+  const cleanBase64 = base64Image.replace(/^data:image\/(png|jpg|jpeg|webp);base64,/, "");
 
-  try {
-    const cleanBase64 = base64Image.replace(/^data:image\/(png|jpg|jpeg|webp);base64,/, "");
+  let lastError: any;
 
-    const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
-      contents: {
-        parts: [
-          { inlineData: { mimeType: "image/jpeg", data: cleanBase64 } },
-          { text: "Analyze this filament spool. Use Google Search to verify specs. Return valid JSON only." }
-        ]
-      },
-      config: {
-        systemInstruction: SYSTEM_INSTRUCTION,
-        // responseMimeType and responseSchema are NOT supported when using tools
-        tools: [{ googleSearch: {} }] 
-      }
-    });
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    try {
+        const response = await ai.models.generateContent({
+        model: "gemini-2.5-flash",
+        contents: {
+            parts: [
+            { inlineData: { mimeType: "image/jpeg", data: cleanBase64 } },
+            { text: "Analyze this filament spool. Use Google Search to verify specs. Return valid JSON only." }
+            ]
+        },
+        config: {
+            systemInstruction: SYSTEM_INSTRUCTION,
+            // responseMimeType and responseSchema are NOT supported when using tools
+            tools: [{ googleSearch: {} }]
+        }
+        });
 
-    let text = response.text;
-    if (!text) throw new Error("No data returned from AI");
-    
-    // Clean potentially markdown-formatted JSON
-    text = text.replace(/```json/g, '').replace(/```/g, '').trim();
-    
-    const data = JSON.parse(text) as FilamentData;
+        let text = response.text;
+        if (!text) throw new Error("No data returned from AI");
 
-    // Extract Grounding Source URL
-    let referenceUrl = '';
-    const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks;
-    if (chunks && chunks.length > 0) {
-        // Try to find the first Web chunk with a URI
-        for (const chunk of chunks) {
-            if (chunk.web?.uri) {
-                referenceUrl = chunk.web.uri;
-                break;
+        // Robust JSON Extraction
+        // 1. Remove markdown
+        text = text.replace(/```json/g, '').replace(/```/g, '').trim();
+        // 2. Find first brace and last brace
+        const firstBrace = text.indexOf('{');
+        const lastBrace = text.lastIndexOf('}');
+        if (firstBrace !== -1 && lastBrace !== -1) {
+            text = text.substring(firstBrace, lastBrace + 1);
+        }
+
+        const data = JSON.parse(text) as FilamentData;
+
+        // Extract Grounding Source URL
+        let referenceUrl = '';
+        const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks;
+        if (chunks && chunks.length > 0) {
+            for (const chunk of chunks) {
+                if (chunk.web?.uri) {
+                    referenceUrl = chunk.web.uri;
+                    break;
+                }
             }
         }
-    }
-    
-    if (referenceUrl) {
-        data.referenceUrl = referenceUrl;
-        data.source = new URL(referenceUrl).hostname.replace('www.', '');
-    }
 
-    return data;
-  } catch (error) {
-    console.error("Gemini Analysis Error:", error);
-    throw new Error("Failed to analyze filament label.");
+        if (referenceUrl) {
+            data.referenceUrl = referenceUrl;
+            try {
+                data.source = new URL(referenceUrl).hostname.replace('www.', '');
+            } catch (e) {
+                data.source = 'Web Search';
+            }
+        }
+
+        return data;
+
+    } catch (error) {
+        console.warn(`Gemini attempt ${attempt + 1} failed:`, error);
+        lastError = error;
+        if (attempt < MAX_RETRIES) {
+            await new Promise(r => setTimeout(r, 1000 * (attempt + 1))); // Exponential backoff
+        }
+    }
   }
+
+  throw new Error(`Failed to analyze label after ${MAX_RETRIES + 1} attempts. ${lastError?.message || ''}`);
 };
