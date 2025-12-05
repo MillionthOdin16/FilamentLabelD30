@@ -280,6 +280,8 @@ export const generateBatchReport = (result: BatchGenerationResult): string => {
         .map(([size, count]) => `  • ${size}mm: ${count} labels`)
         .join('\n');
 
+    const rollChanges = Math.max(0, result.paperUsage.labelsBySize.size - 1);
+
     return `
 🏷️ Batch Generation Report
 
@@ -287,6 +289,7 @@ export const generateBatchReport = (result: BatchGenerationResult): string => {
   • Total Labels: ${result.paperUsage.totalLabels}
   • Estimated Time: ${Math.round(result.estimatedTime / 60)} minutes
   • Paper Usage: ~${Math.round(result.paperUsage.estimatedLengthMm / 10)}cm
+  • Est. Roll Changes: ${rollChanges}
 
 📏 Label Sizes:
 ${sizeBreakdown}

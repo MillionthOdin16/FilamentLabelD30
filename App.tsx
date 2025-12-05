@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Camera, Printer, RotateCcw, PenTool, Loader2, Info, Bluetooth, Ruler, History, ArrowRight, Battery, BatteryFull, BatteryLow, BatteryMedium, ExternalLink, AlertTriangle, Eye, X, Download, Upload, Image as ImageIcon, Edit3, CheckCircle2, Sparkles, Package, Layout, BarChart3, Layers } from 'lucide-react';
+import { Camera, Printer, RotateCcw, PenTool, Loader2, Info, Bluetooth, Ruler, History, ArrowRight, Battery, BatteryFull, BatteryLow, BatteryMedium, ExternalLink, AlertTriangle, Eye, X, Download, Upload, Image as ImageIcon, Edit3, CheckCircle2, Sparkles, Package, Layout, BarChart3, Layers, PlusCircle, Scan } from 'lucide-react';
 import { AppState, FilamentData, LABEL_PRESETS, LabelPreset, PrintSettings, HistoryEntry, LabelTheme, PrinterInfo, PrintJob, LabelTemplate } from './types';
 import { analyzeFilamentImage } from './services/geminiService';
-import { connectPrinter, printLabel, getBatteryLevel, getDeviceDetails, checkPrinterStatus } from './services/printerService';
+import { connectPrinter, printLabel, getBatteryLevel, getDeviceDetails, checkPrinterStatus, addConnectionListener, removeConnectionListener, getConnectedDevice, addStatusListener, removeStatusListener } from './services/printerService';
 import CameraCapture from './components/CameraCapture';
 import LabelEditor from './components/LabelEditor';
 import LabelCanvas from './components/LabelCanvas';
@@ -11,9 +11,11 @@ import PrinterTools from './components/PrinterTools';
 import PrintStatus, { PrintStep } from './components/PrintStatus';
 import SuccessView from './components/SuccessView';
 import FilamentLibrary from './components/FilamentLibrary';
+import PrinterStatusModal from './components/PrinterStatusModal';
 import BatchGenerator from './components/BatchGenerator';
 import AnalyticsDashboard from './components/AnalyticsDashboard';
 import TemplateGallery from './components/TemplateGallery';
+import { useToast } from './components/ToastProvider';
 
 const DEFAULT_DATA: FilamentData = {
   brand: 'GENERIC',
@@ -45,11 +47,14 @@ const DEFAULT_SETTINGS: PrintSettings = {
 type Tab = 'editor' | 'batch' | 'templates' | 'analytics';
 
 const App: React.FC = () => {
+  const toast = useToast();
   const [state, setState] = useState<AppState>(AppState.HOME);
   const [activeTab, setActiveTab] = useState<Tab>('editor');
   const [filamentData, setFilamentData] = useState<FilamentData>(DEFAULT_DATA);
+
   const [printSettings, setPrintSettings] = useState<PrintSettings>(DEFAULT_SETTINGS);
   const [selectedLabel, setSelectedLabel] = useState<LabelPreset>(LABEL_PRESETS[0]); // Default to 12x40mm (Index 0)
+
   const [previewCanvas, setPreviewCanvas] = useState<HTMLCanvasElement | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -62,20 +67,39 @@ const App: React.FC = () => {
   const [isIframe, setIsIframe] = useState(false);
   const [showIframeWarning, setShowIframeWarning] = useState(true);
   const [showSuccess, setShowSuccess] = useState(false);
+  const [isConnected, setIsConnected] = useState(false);
+  const [showPrinterStatus, setShowPrinterStatus] = useState(false);
 
   // Batch Printing State
   const [batchQueue, setBatchQueue] = useState<PrintJob[]>([]);
   const [currentBatchIndex, setCurrentBatchIndex] = useState<number>(-1);
   const [batchCanvas, setBatchCanvas] = useState<HTMLCanvasElement | null>(null);
   const [isBatchPrinting, setIsBatchPrinting] = useState(false);
+  const [batchOverrideSize, setBatchOverrideSize] = useState<LabelPreset | null>(null);
+  const [sessionSelectedIds, setSessionSelectedIds] = useState<Set<string>>(new Set());
+  const [lastBatchQueue, setLastBatchQueue] = useState<PrintJob[] | null>(null);
+  const [lastBatchOverrideSizeId, setLastBatchOverrideSizeId] = useState<string | undefined>(undefined);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     // Load History
-    const saved = localStorage.getItem('filament_history');
-    if (saved) {
-      try { setHistory(JSON.parse(saved)); } catch (e) { console.error("History error", e); }
+    const savedHistory = localStorage.getItem('filament_history');
+    if (savedHistory) {
+      try { setHistory(JSON.parse(savedHistory)); } catch (e) { console.error("History error", e); }
+    }
+
+    // Load Settings
+    const savedSettings = localStorage.getItem('filament_settings');
+    if (savedSettings) {
+      try { setPrintSettings(prev => ({ ...prev, ...JSON.parse(savedSettings) })); } catch (e) { console.error("Settings error", e); }
+    }
+
+    // Load Label
+    const savedLabelId = localStorage.getItem('filament_label_id');
+    if (savedLabelId) {
+       const preset = LABEL_PRESETS.find(p => p.id === savedLabelId);
+       if (preset) setSelectedLabel(preset);
     }
 
     // Check environment
@@ -86,6 +110,36 @@ const App: React.FC = () => {
     } catch (e) {
       setIsIframe(true);
     }
+
+    // Bluetooth Listeners
+    const listener = (connected: boolean) => {
+      setIsConnected(connected);
+      if (connected) {
+        toast.success("Printer Connected", "Ready to print labels");
+        // Auto-fetch details if reconnected
+        const device = getConnectedDevice();
+        if (device) {
+           getBatteryLevel(device).then(setBatteryLevel);
+           getDeviceDetails(device).then(setPrinterInfo);
+        }
+      } else {
+        // Only show disconnect warning if we were previously connected (avoid noise on load)
+        // We can't easily check previous state here without ref, but it's fine.
+        setBatteryLevel(null);
+      }
+    };
+    addConnectionListener(listener);
+
+    // Status Listener
+    const statusListener = (status: string) => {
+       setStatusMsg(status);
+    };
+    addStatusListener(statusListener);
+
+    return () => {
+      removeConnectionListener(listener);
+      removeStatusListener(statusListener);
+    };
   }, []);
 
   const saveToHistory = (data: FilamentData) => {
@@ -93,6 +147,7 @@ const App: React.FC = () => {
     const newHistory = [newEntry, ...history].slice(0, 50); // Keep last 50
     setHistory(newHistory);
     localStorage.setItem('filament_history', JSON.stringify(newHistory));
+    return newEntry.id;
   };
 
   const deleteFromHistory = (id: string) => {
@@ -150,6 +205,32 @@ const App: React.FC = () => {
     }
   };
 
+  const handleCodeScanned = (code: string) => {
+     // Try to parse standard format: Brand|Material|Min-Max
+     if (code.includes('|')) {
+         const parts = code.split('|');
+         if (parts.length >= 2) {
+             const brand = parts[0];
+             const material = parts[1];
+             const temps = parts[2] ? parts[2].split('-') : [];
+
+             const newData = { ...DEFAULT_DATA, brand, material, source: 'Smart Scan' };
+             if (temps.length === 2) {
+                 newData.minTemp = parseInt(temps[0]) || 200;
+                 newData.maxTemp = parseInt(temps[1]) || 220;
+             }
+
+             setFilamentData(newData);
+             toast.success("Label Cloned", `${brand} ${material}`);
+             setState(AppState.EDITING);
+             return;
+         }
+     }
+
+     // Fallback: Check if it's a UUID/URL?
+     // For now, only support our standard format.
+  };
+
   const handleDownloadPng = () => {
     if (previewCanvas) {
       const link = document.createElement('a');
@@ -166,9 +247,12 @@ const App: React.FC = () => {
 
   const performPrint = async (canvas: HTMLCanvasElement, settings: PrintSettings, isBatchItem = false) => {
     setIsProcessing(true);
+
+    // Improved UX: If already connected, skip the "Searching..." phase updates to reduce flicker
+    // But still set step to 'connecting' (or maybe 'printing') to ensure UI blocks interactions
     if (!isBatchItem) {
-      setPrintStep('connecting');
-      setStatusMsg('Searching for printer...');
+      setPrintStep(isConnected ? 'printing' : 'connecting');
+      if (!isConnected) setStatusMsg('Searching for printer...');
       setErrorMsg(null);
       setShowSuccess(false);
     }
@@ -177,7 +261,7 @@ const App: React.FC = () => {
       const device = await connectPrinter();
 
       // Only fetch details if we don't have them or it's the first print
-      if (!printerInfo || !isBatchItem) {
+      if ((!printerInfo || !isBatchItem) && !isBatchPrinting && !isConnected) {
         if (!isBatchItem) {
           setPrintStep('fetching');
           setStatusMsg('Reading device information...');
@@ -191,8 +275,14 @@ const App: React.FC = () => {
       }
 
       if (!isBatchItem) {
-        setPrintStep('checking');
-        setStatusMsg('Verifying printer status...');
+         // Optimization: Skip explicit status check if we just printed (assumed ready)
+         // But for reliability, checking is safer.
+         // Let's keep it but make message less intrusive if connected
+         if (!isConnected) {
+            setPrintStep('checking');
+            setStatusMsg('Verifying printer status...');
+         }
+
         const status = await checkPrinterStatus(device);
         if (status === 'paper_out') throw new Error("Printer reports: Out of Paper");
         if (status === 'cover_open') throw new Error("Printer reports: Cover Open");
@@ -259,62 +349,110 @@ const App: React.FC = () => {
   // Batch Processing Effect
   useEffect(() => {
     const processBatchItem = async () => {
-      // We need both the index to be valid AND the canvas to be ready (not null)
-      // We also check if we are actually in batch printing mode
-      if (isBatchPrinting && currentBatchIndex >= 0 && currentBatchIndex < batchQueue.length && batchCanvas) {
+      // Safety check: ensure queue is valid and index is within bounds
+      if (!isBatchPrinting || currentBatchIndex < 0) return;
 
-        const job = batchQueue[currentBatchIndex];
+      if (currentBatchIndex >= batchQueue.length) {
+         // Batch Finished
+         setIsBatchPrinting(false);
+         setPrintStep('success');
+         setStatusMsg('Batch Complete!');
+         setShowSuccess(true);
+         setBatchQueue([]);
+         setCurrentBatchIndex(-1);
+         return;
+      }
 
-        // Small delay to ensure canvas is painted
-        await new Promise(r => setTimeout(r, 500));
+      const job = batchQueue[currentBatchIndex];
+      // Safety check: if job is undefined (shouldn't happen with bounds check above)
+      if (!job) return;
 
-        try {
-          // Update status for the user
+      // Wait for canvas to be populated?
+      // The canvas is rendered conditionally: batchQueue[currentBatchIndex] && ...
+      // We need to wait for `batchCanvas` state to update with the new canvas element reference
+      // generated by the LabelCanvas.
+      // However, LabelCanvas `onCanvasReady` sets state.
+      // If we are too fast, `batchCanvas` might be the OLD one or null.
+
+      if (!batchCanvas) {
+          // Waiting for canvas to mount/render
+          return;
+      }
+
+      try {
           setPrintStep('printing');
-          setStatusMsg(`Printing ${currentBatchIndex + 1}/${batchQueue.length}: ${job.data.brand} ${job.data.material}`);
+          setStatusMsg(`Printing ${currentBatchIndex + 1}/${batchQueue.length}: ${job.label.brand} ${job.label.material}`);
 
-          // Print!
           await performPrint(batchCanvas, job.settings, true);
 
-          // Move to next or finish
-          if (currentBatchIndex < batchQueue.length - 1) {
-            // Reset canvas to force a re-render for the next item
-            setBatchCanvas(null);
-            setCurrentBatchIndex(prev => prev + 1);
-          } else {
-            // Done
-            setIsBatchPrinting(false);
-            setPrintStep('success');
-            setStatusMsg('Batch Complete!');
-            setShowSuccess(true);
-            setBatchQueue([]);
-            setCurrentBatchIndex(-1);
-          }
-        } catch (e: any) {
+          // Prepare for next
+          setBatchCanvas(null); // Force reset to wait for new canvas
+          setCurrentBatchIndex(prev => prev + 1);
+
+      } catch (e: any) {
           console.error("Batch failed", e);
           setIsBatchPrinting(false);
           setErrorMsg(`Batch failed at item ${currentBatchIndex + 1}: ${e.message}`);
           setPrintStep('error');
-        }
       }
     };
 
-    processBatchItem();
-  }, [currentBatchIndex, batchCanvas, isBatchPrinting, batchQueue]);
+    // Trigger only when batchCanvas becomes available OR if we are just starting/transitioning
+    // We add a small timeout to let React render the hidden canvas
+    if (isBatchPrinting && batchCanvas) {
+         const timer = setTimeout(processBatchItem, 500);
+         return () => clearTimeout(timer);
+    }
+  }, [batchCanvas, isBatchPrinting, currentBatchIndex, batchQueue]);
 
-  const handleBatchPrint = async (jobs: PrintJob[]) => {
+  const handleBatchPrint = async (jobs: PrintJob[], overrideSizeId?: string) => {
     if (jobs.length === 0) return;
+
+    // Save for retry capability
+    setLastBatchQueue(jobs);
+    setLastBatchOverrideSizeId(overrideSizeId);
+
+    if (overrideSizeId && overrideSizeId !== 'default') {
+        const preset = LABEL_PRESETS.find(p => p.id === overrideSizeId);
+        setBatchOverrideSize(preset || null);
+    } else {
+        setBatchOverrideSize(null);
+    }
+
     setBatchQueue(jobs);
     setCurrentBatchIndex(0);
+    setBatchCanvas(null); // Reset canvas
     setIsBatchPrinting(true);
     setPrintStep('connecting'); // Initial status
     setStatusMsg('Starting batch print...');
   };
 
+  const handleReprintLastBatch = () => {
+      if (lastBatchQueue) {
+          handleBatchPrint(lastBatchQueue, lastBatchOverrideSizeId);
+      }
+  };
+
+  const handleAddToBatch = () => {
+      const id = saveToHistory(filamentData);
+      setSessionSelectedIds(prev => new Set(prev).add(id));
+      toast.success("Added to Batch", `${filamentData.brand} ${filamentData.material}`);
+  };
+
+  const handleAddToBatchAndScan = () => {
+      const id = saveToHistory(filamentData);
+      setSessionSelectedIds(prev => new Set(prev).add(id));
+
+      toast.success("Added & Ready", "Opening camera...");
+
+      // Short delay then switch to camera
+      setTimeout(() => {
+          handleStartCapture();
+      }, 500);
+  };
+
   const handleSelectTemplate = (template: LabelTemplate) => {
     const newSettings = { ...printSettings };
-
-    // Map template category/tags to themes
     if (template.category === 'minimal') newSettings.theme = LabelTheme.MINIMAL;
     else if (template.category === 'detailed') newSettings.theme = LabelTheme.TECHNICAL;
     else if (template.category === 'brand') newSettings.theme = LabelTheme.BOLD;
@@ -325,7 +463,6 @@ const App: React.FC = () => {
     setPrintSettings(newSettings);
     setActiveTab('editor');
 
-    // Show a temporary success message
     setPrintStep('success');
     setStatusMsg(`Applied template: ${template.name}`);
     setTimeout(() => {
@@ -337,6 +474,12 @@ const App: React.FC = () => {
   const handlePrintMore = () => {
     setShowSuccess(false);
     setPrintStep('idle');
+  };
+
+  const handleScanAnother = () => {
+    setShowSuccess(false);
+    setPrintStep('idle');
+    handleStartCapture();
   };
 
   const resetFlow = () => {
@@ -387,11 +530,21 @@ const App: React.FC = () => {
                   {printerInfo.model}
                 </span>
               )}
+              {isConnected && (
+                  <span className="text-[9px] bg-green-900/40 text-green-400 px-1 rounded border border-green-800/50 flex items-center gap-1">
+                      <Bluetooth size={8} /> Connected
+                  </span>
+              )}
             </div>
           </div>
         </div>
         <div className="flex items-center gap-2">
-          {renderBattery()}
+          <button
+            onClick={() => setShowPrinterStatus(true)}
+            className="hover:scale-105 transition-transform"
+          >
+            {renderBattery()}
+          </button>
           {state !== AppState.HOME && (
             <button onClick={resetFlow} className="p-2 bg-gray-800 hover:bg-gray-700 rounded-full transition-colors text-gray-400 hover:text-white">
               <RotateCcw size={20} />
@@ -402,7 +555,7 @@ const App: React.FC = () => {
 
       {/* Tab Navigation */}
       {state !== AppState.HOME && state !== AppState.CAMERA && state !== AppState.ANALYZING && (
-        <div className="sticky top-[88px] z-30 bg-gray-950 border-b border-gray-800 px-4">
+        <div className="sticky top-[88px] z-30 bg-gray-950/80 backdrop-blur-md border-b border-gray-800 px-4 transition-all duration-300">
           <div className="flex gap-4 overflow-x-auto no-scrollbar max-w-xl mx-auto">
             {[
               { id: 'editor', label: 'Editor', icon: Edit3 },
@@ -412,9 +565,10 @@ const App: React.FC = () => {
             ].map(tab => (
               <button
                 key={tab.id}
+                data-testid={`tab-${tab.id}`}
                 onClick={() => setActiveTab(tab.id as Tab)}
                 className={`
-                              flex items-center gap-2 py-3 px-1 border-b-2 transition-colors whitespace-nowrap
+                              flex items-center gap-2 py-3 px-1 border-b-2 transition-colors whitespace-nowrap relative
                               ${activeTab === tab.id
                     ? 'border-cyan-500 text-cyan-400'
                     : 'border-transparent text-gray-500 hover:text-gray-300'}
@@ -422,6 +576,11 @@ const App: React.FC = () => {
               >
                 <tab.icon size={16} />
                 <span className="text-xs font-bold uppercase tracking-wider">{tab.label}</span>
+                {tab.id === 'batch' && sessionSelectedIds.size > 0 && (
+                    <span className="absolute top-1 right-[-4px] bg-cyan-600 text-white text-[9px] w-4 h-4 flex items-center justify-center rounded-full font-bold">
+                        {sessionSelectedIds.size}
+                    </span>
+                )}
               </button>
             ))}
           </div>
@@ -429,6 +588,14 @@ const App: React.FC = () => {
       )}
 
       <main className="max-w-xl mx-auto p-6 pb-40">
+        <PrinterStatusModal
+            isOpen={showPrinterStatus}
+            onClose={() => setShowPrinterStatus(false)}
+            printerInfo={printerInfo}
+            batteryLevel={batteryLevel}
+            isConnected={isConnected}
+        />
+
         {/* Iframe Warning */}
         {isIframe && showIframeWarning && state === AppState.HOME && (
           <div className="mb-6 p-4 bg-yellow-900/20 border border-yellow-700/50 rounded-xl flex items-start gap-3 relative animate-fade-in-up">
@@ -459,72 +626,105 @@ const App: React.FC = () => {
         )}
 
         {state === AppState.HOME && (
-          <div className="flex flex-col items-center space-y-12 mt-4 animate-fade-in">
-            <div className="text-center space-y-6">
-              <h2 className="text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-white via-gray-200 to-gray-500 tracking-tight">
-                Scan.<br />Label.<br />Print.
-              </h2>
-              <p className="text-gray-400 max-w-xs mx-auto text-lg">
-                The ultimate AI-powered labeling tool for your 3D printing filament.
-              </p>
+          <div className="flex flex-col space-y-6 mt-2 animate-fade-in">
 
-              <div className="flex gap-4 items-center justify-center w-full">
+            {/* Status Card */}
+            <div className="bg-gray-900 border border-gray-800 rounded-2xl p-4 flex items-center justify-between shadow-lg">
+                <div>
+                    <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                        {isConnected ? (
+                            <span className="flex items-center gap-2 text-green-400"><CheckCircle2 size={16} /> Printer Ready</span>
+                        ) : (
+                            <span className="flex items-center gap-2 text-gray-400"><Printer size={16} /> Printer Disconnected</span>
+                        )}
+                    </h3>
+                    <p className="text-xs text-gray-500 mt-1">
+                        {printerInfo?.model || 'No device connected'} {batteryLevel !== null && `• ${batteryLevel}% Battery`}
+                    </p>
+                </div>
+                <button
+                    onClick={() => { if (!isConnected) connectPrinter().catch(console.error); }}
+                    className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all ${isConnected ? 'bg-green-900/20 text-green-400 cursor-default' : 'bg-cyan-600 hover:bg-cyan-500 text-white'}`}
+                >
+                    {isConnected ? 'Connected' : 'Connect'}
+                </button>
+            </div>
+
+            {/* Quick Actions Grid */}
+            <div className="grid grid-cols-2 gap-3">
                 <button
                   onClick={handleStartCapture}
-                  className="group relative flex items-center justify-center w-48 h-48 rounded-3xl bg-gray-900 border border-gray-800 hover:border-cyan-500/50 transition-all duration-300 shadow-2xl hover:shadow-cyan-900/20"
+                  className="col-span-2 group relative flex items-center justify-between p-6 rounded-3xl bg-gradient-to-br from-gray-900 to-gray-800 border border-gray-800 hover:border-cyan-500/50 transition-all duration-300 shadow-xl overflow-hidden"
                 >
-                  <div className="absolute inset-0 rounded-3xl bg-cyan-500/5 group-hover:bg-cyan-500/10 transition-all blur-xl"></div>
-                  <div className="flex flex-col items-center space-y-3 relative z-10">
-                    <Camera size={40} className="text-cyan-400 group-hover:scale-110 transition-transform duration-300" />
-                    <span className="font-bold tracking-widest text-xs text-gray-300 group-hover:text-white">CAMERA</span>
+                  <div className="absolute inset-0 bg-cyan-500/5 group-hover:bg-cyan-500/10 transition-all"></div>
+                  <div className="relative z-10 flex flex-col items-start gap-1">
+                    <span className="text-2xl font-black text-white">Scan Label</span>
+                    <span className="text-xs text-gray-400">Identify filament via camera</span>
+                  </div>
+                  <div className="w-12 h-12 bg-cyan-500/20 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform">
+                    <Camera size={24} className="text-cyan-400" />
                   </div>
                 </button>
 
-                <div className="flex flex-col items-center justify-center gap-2">
-                  <input
-                    type="file"
-                    ref={fileInputRef}
-                    accept="image/*"
-                    className="hidden"
-                    onChange={handleFileUpload}
-                  />
-                  <button
-                    onClick={triggerFileUpload}
-                    className="group w-24 h-24 rounded-2xl bg-gray-900 border border-gray-800 hover:border-gray-600 transition-all duration-300 flex flex-col items-center justify-center gap-2"
-                  >
-                    <ImageIcon size={24} className="text-gray-500 group-hover:text-cyan-400 transition-colors" />
-                    <span className="text-[10px] font-bold text-gray-500 uppercase">Gallery</span>
-                  </button>
-                  <button
+                <button
                     onClick={handleManualEntry}
-                    className="group w-24 h-16 rounded-2xl bg-gray-900 border border-gray-800 hover:border-cyan-600 transition-all duration-300 flex flex-col items-center justify-center gap-1"
-                  >
-                    <Edit3 size={18} className="text-gray-500 group-hover:text-cyan-400 transition-colors" />
-                    <span className="text-[10px] font-bold text-gray-500 group-hover:text-cyan-400 uppercase">Manual</span>
-                  </button>
-                </div>
-              </div>
+                    className="p-4 rounded-2xl bg-gray-900 border border-gray-800 hover:bg-gray-800 transition-all flex flex-col gap-2 items-start"
+                >
+                    <div className="w-8 h-8 bg-gray-800 rounded-lg flex items-center justify-center">
+                        <Edit3 size={16} className="text-cyan-400" />
+                    </div>
+                    <span className="font-bold text-sm text-gray-200">Manual Entry</span>
+                </button>
 
+                <div className="relative">
+                    <input
+                        type="file"
+                        ref={fileInputRef}
+                        accept="image/*"
+                        className="hidden"
+                        onChange={handleFileUpload}
+                    />
+                    <button
+                        onClick={triggerFileUpload}
+                        className="w-full h-full p-4 rounded-2xl bg-gray-900 border border-gray-800 hover:bg-gray-800 transition-all flex flex-col gap-2 items-start"
+                    >
+                        <div className="w-8 h-8 bg-gray-800 rounded-lg flex items-center justify-center">
+                            <ImageIcon size={16} className="text-purple-400" />
+                        </div>
+                        <span className="font-bold text-sm text-gray-200">From Gallery</span>
+                    </button>
+                </div>
             </div>
 
-            {/* Filament Library */}
-            {history.length > 0 && (
-              <FilamentLibrary
-                history={history}
-                onSelect={loadFromHistory}
-                onDelete={deleteFromHistory}
-                maxDisplay={4}
-              />
-            )}
+            {/* Recent Activity */}
+            <div className="space-y-3 pt-2">
+                <div className="flex items-center justify-between px-1">
+                    <h3 className="text-xs font-bold uppercase tracking-wider text-gray-500">Recent Labels</h3>
+                    {history.length > 0 && (
+                        <button onClick={() => { setActiveTab('batch'); setState(AppState.EDITING); }} className="text-xs text-cyan-400 hover:text-cyan-300">
+                            View All
+                        </button>
+                    )}
+                </div>
 
-            <div className="text-xs text-gray-600 flex items-center gap-2 pt-8">
-              <Bluetooth size={14} />
-              <span>Supports Phomemo M110, M02, D30, Q30</span>
+                {history.length > 0 ? (
+                    <FilamentLibrary
+                        history={history}
+                        onSelect={loadFromHistory}
+                        onDelete={deleteFromHistory}
+                        maxDisplay={3}
+                    />
+                ) : (
+                    <div className="text-center py-8 bg-gray-900/50 rounded-2xl border border-dashed border-gray-800">
+                        <p className="text-gray-500 text-xs">No recent labels found.</p>
+                        <p className="text-gray-600 text-[10px] mt-1">Scan your first spool to get started!</p>
+                    </div>
+                )}
             </div>
           </div>
         )}
 
-        {state === AppState.CAMERA && <CameraCapture onCapture={handleImageCaptured} onCancel={() => setState(AppState.HOME)} />}
+        {state === AppState.CAMERA && <CameraCapture onCapture={handleImageCaptured} onCancel={() => setState(AppState.HOME)} onScanCode={handleCodeScanned} />}
         {state === AppState.ANALYZING && capturedImage && <AnalysisView imageSrc={capturedImage} />}
 
         {(state === AppState.EDITING || state === AppState.PRINTING_SUCCESS) && (
@@ -594,6 +794,26 @@ const App: React.FC = () => {
                     onConfirm={() => { }}
                     onDownload={handleDownloadPng}
                   />
+
+                  {/* Batch Actions */}
+                  <div className="flex gap-3 mt-4">
+                      <button
+                        onClick={handleAddToBatch}
+                        className="flex-1 py-3 bg-gray-800 border border-gray-700 hover:bg-gray-700 text-white font-bold rounded-xl transition-colors flex items-center justify-center gap-2 text-xs uppercase tracking-wide"
+                      >
+                        <PlusCircle size={18} className="text-gray-400" />
+                        <span>Add to Batch</span>
+                      </button>
+
+                      <button
+                        onClick={handleAddToBatchAndScan}
+                        className="flex-[1.5] py-3 bg-gray-800 border border-gray-700 hover:bg-gray-700 text-white font-bold rounded-xl transition-colors flex items-center justify-center gap-2 text-xs uppercase tracking-wide"
+                      >
+                        <Scan size={18} className="text-cyan-400" />
+                        <span>Add & Scan Next</span>
+                      </button>
+                  </div>
+
                 </section>
 
                 <PrinterTools settings={printSettings} onSettingsChange={setPrintSettings} />
@@ -602,7 +822,13 @@ const App: React.FC = () => {
 
             {/* --- BATCH TAB --- */}
             {activeTab === 'batch' && (
-              <BatchGenerator history={history} onPrintBatch={handleBatchPrint} />
+              <BatchGenerator
+                history={history}
+                onPrintBatch={handleBatchPrint}
+                initialSelectedIds={sessionSelectedIds}
+                onSelectionChange={setSessionSelectedIds}
+                onRequestScan={handleStartCapture}
+              />
             )}
 
             {/* --- TEMPLATES TAB --- */}
@@ -628,6 +854,33 @@ const App: React.FC = () => {
             onDownload={handleDownloadPng}
           />
         )}
+
+        {/* Retry/Reprint Batch Action (Only visible after batch completion) */}
+        {showSuccess && state === AppState.PRINTING_SUCCESS && lastBatchQueue && !isBatchPrinting && (
+             <div className="fixed bottom-36 left-1/2 transform -translate-x-1/2 z-50">
+                 <button
+                    onClick={handleReprintLastBatch}
+                    className="bg-gray-800 border border-gray-700 text-gray-300 px-4 py-2 rounded-full shadow-lg flex items-center gap-2 hover:bg-gray-700 hover:text-white transition-colors text-xs font-bold uppercase"
+                >
+                    <RotateCcw size={14} />
+                    <span>Reprint Batch</span>
+                </button>
+            </div>
+        )}
+
+        {/* Custom Scan Another Action in Success View */}
+        {showSuccess && state === AppState.PRINTING_SUCCESS && (
+            <div className="fixed bottom-24 left-1/2 transform -translate-x-1/2 z-50">
+                 <button
+                    onClick={handleScanAnother}
+                    className="bg-gray-800 border border-gray-700 text-white px-6 py-3 rounded-full shadow-xl flex items-center gap-2 hover:bg-gray-700 transition-colors"
+                >
+                    <Scan size={18} className="text-cyan-400" />
+                    <span className="font-bold text-sm">Scan Another</span>
+                </button>
+            </div>
+        )}
+
       </main>
 
       {(state === AppState.EDITING || state === AppState.PRINTING_SUCCESS) && !showSuccess && activeTab === 'editor' && (
@@ -677,11 +930,14 @@ const App: React.FC = () => {
                 onClick={handlePrint}
                 disabled={isProcessing}
                 className={`w-full py-4 rounded-xl shadow-2xl font-bold text-lg flex items-center justify-center gap-3 transition-all transform active:scale-95 glow-cyan
-                  ${isProcessing ? 'bg-gray-800 text-gray-500 cursor-not-allowed' : 'bg-gradient-to-r from-cyan-500 to-blue-600 text-white hover:from-cyan-400 hover:to-blue-500'}
+                  ${isProcessing ? 'bg-gray-800 text-gray-500 cursor-not-allowed' :
+                    (filamentData.confidence !== undefined && filamentData.confidence < 80)
+                    ? 'bg-gradient-to-r from-orange-500 to-red-600 text-white hover:from-orange-400 hover:to-red-500'
+                    : 'bg-gradient-to-r from-cyan-500 to-blue-600 text-white hover:from-cyan-400 hover:to-blue-500'}
                 `}
               >
-                <Printer size={24} />
-                PRINT LABEL
+                {(filamentData.confidence !== undefined && filamentData.confidence < 80) ? <AlertTriangle size={24} /> : <Printer size={24} />}
+                {(filamentData.confidence !== undefined && filamentData.confidence < 80 && isConnected) ? 'VERIFY & PRINT' : (isConnected ? 'PRINT LABEL' : 'CONNECT & PRINT')}
                 {printSettings.copies > 1 && (
                   <span className="bg-white/20 px-2 py-0.5 rounded-full text-sm">×{printSettings.copies}</span>
                 )}
@@ -714,8 +970,8 @@ const App: React.FC = () => {
 
             <div className="bg-gray-800/50 p-4 rounded-lg text-left">
               <p className="text-xs text-gray-500 uppercase font-bold mb-1">Current Label</p>
-              <p className="text-white font-bold">{batchQueue[currentBatchIndex]?.data.brand}</p>
-              <p className="text-cyan-400 text-sm">{batchQueue[currentBatchIndex]?.data.material}</p>
+              <p className="text-white font-bold">{batchQueue[currentBatchIndex]?.label.brand}</p>
+              <p className="text-cyan-400 text-sm">{batchQueue[currentBatchIndex]?.label.material}</p>
             </div>
 
             <button
@@ -733,10 +989,10 @@ const App: React.FC = () => {
         {isBatchPrinting && currentBatchIndex >= 0 && batchQueue[currentBatchIndex] && (
           <LabelCanvas
             key={`batch-${currentBatchIndex}`} // Force re-mount
-            data={batchQueue[currentBatchIndex].data}
+            data={batchQueue[currentBatchIndex].label}
             settings={batchQueue[currentBatchIndex].settings}
-            widthMm={selectedLabel.widthMm}
-            heightMm={selectedLabel.heightMm}
+            widthMm={batchOverrideSize ? batchOverrideSize.widthMm : selectedLabel.widthMm}
+            heightMm={batchOverrideSize ? batchOverrideSize.heightMm : selectedLabel.heightMm}
             onCanvasReady={setBatchCanvas}
             scale={2} // High res for print
           />
