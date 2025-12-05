@@ -3,6 +3,21 @@ import React, { useState } from 'react';
 import { FilamentData, PrintSettings, LabelTheme, MATERIAL_PRESETS, MaterialPreset } from '../types';
 import { Copy, QrCode, Sun, Moon, Minus, Plus, Palette, Calendar, Layers, Sparkles, Droplets, Download, Link, Eye, EyeOff, AlertTriangle, ChevronDown, CheckCircle2, Thermometer, Weight, Type, Grid3X3, Zap, FileText, MessageSquare, CalendarPlus } from 'lucide-react';
 import QuickMaterialPicker from './QuickMaterialPicker';
+import SmartSlider from './SmartSlider';
+
+const PRESET_COLORS = [
+  { hex: '#FFFFFF', name: 'White' },
+  { hex: '#000000', name: 'Black' },
+  { hex: '#FF0000', name: 'Red' },
+  { hex: '#0000FF', name: 'Blue' },
+  { hex: '#00FF00', name: 'Green' },
+  { hex: '#FFFF00', name: 'Yellow' },
+  { hex: '#FFA500', name: 'Orange' },
+  { hex: '#800080', name: 'Purple' },
+  { hex: '#808080', name: 'Grey' },
+  { hex: '#C0C0C0', name: 'Silver' },
+  { hex: '#FFD700', name: 'Gold' },
+];
 
 // Theme descriptions for better UX
 const THEME_INFO: Record<LabelTheme, { icon: React.ElementType; description: string }> = {
@@ -42,6 +57,11 @@ const LabelEditor: React.FC<LabelEditorProps> = ({
   };
 
   const toggleField = (field: keyof typeof settings.visibleFields) => {
+      // If turning on Date and it's empty, set to today
+      if (field === 'date' && !settings.visibleFields.date && !data.openDate) {
+          onChange({ ...data, openDate: new Date().toISOString().split('T')[0] });
+      }
+
       onSettingsChange({
           ...settings,
           visibleFields: { ...settings.visibleFields, [field]: !settings.visibleFields[field] }
@@ -187,6 +207,23 @@ const LabelEditor: React.FC<LabelEditorProps> = ({
                         placeholder="Color"
                     />
                 </div>
+                {/* Quick Colors */}
+                <div className="flex gap-1.5 mt-2 flex-wrap">
+                    {PRESET_COLORS.map(c => (
+                        <button
+                            key={c.hex}
+                            onClick={() => {
+                                handleChange('colorHex', c.hex);
+                                if (!data.colorName || PRESET_COLORS.some(p => p.name === data.colorName)) {
+                                    handleChange('colorName', c.name);
+                                }
+                            }}
+                            className={`w-4 h-4 rounded-full border border-gray-600 shadow-sm hover:scale-125 transition-transform ${data.colorHex === c.hex ? 'ring-2 ring-cyan-400' : ''}`}
+                            style={{backgroundColor: c.hex}}
+                            title={c.name}
+                        />
+                    ))}
+                </div>
              </div>
              <div>
                 <label className="text-xs text-gray-400 uppercase font-bold tracking-wider mb-1 flex items-center gap-1.5">
@@ -203,48 +240,42 @@ const LabelEditor: React.FC<LabelEditorProps> = ({
              </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-4 mb-4">
-          <div>
-            <label className="text-xs text-gray-400 uppercase font-bold tracking-wider mb-1 flex items-center gap-1.5">
-                <Thermometer size={12} className="text-cyan-500" />
-                Nozzle Temp (°C)
-            </label>
-            <div className="flex items-center gap-2">
-              <input 
-                  type="number" 
-                  value={data.minTemp} 
-                  onChange={(e) => handleChange('minTemp', parseInt(e.target.value))}
-                  className="w-full bg-gray-950 border border-gray-750 rounded p-2 text-center text-white"
-              />
-              <span className="text-gray-500">-</span>
-              <input 
-                  type="number" 
-                  value={data.maxTemp} 
-                  onChange={(e) => handleChange('maxTemp', parseInt(e.target.value))}
-                  className="w-full bg-gray-950 border border-gray-750 rounded p-2 text-center text-white"
-              />
-            </div>
+        <div className="grid grid-cols-2 gap-6 mb-6">
+          <div className="space-y-4">
+             <SmartSlider
+                label="Nozzle Min"
+                value={data.minTemp}
+                onChange={(v) => handleChange('minTemp', v)}
+                min={180} max={320}
+                safeMin={190} safeMax={220} // Could be dynamic based on material
+                unit="°C"
+             />
+             <SmartSlider
+                label="Nozzle Max"
+                value={data.maxTemp}
+                onChange={(v) => handleChange('maxTemp', v)}
+                min={180} max={320}
+                safeMin={200} safeMax={230}
+                unit="°C"
+             />
           </div>
-          <div>
-            <label className="text-xs text-gray-400 uppercase font-bold tracking-wider mb-1 flex items-center gap-1.5">
-                <Thermometer size={12} className="text-red-400" />
-                Bed Temp (°C)
-            </label>
-            <div className="flex items-center gap-2">
-              <input 
-                  type="number" 
-                  value={data.bedTempMin} 
-                  onChange={(e) => handleChange('bedTempMin', parseInt(e.target.value))}
-                  className="w-full bg-gray-950 border border-gray-750 rounded p-2 text-center text-white"
-              />
-              <span className="text-gray-500">-</span>
-              <input 
-                  type="number" 
-                  value={data.bedTempMax} 
-                  onChange={(e) => handleChange('bedTempMax', parseInt(e.target.value))}
-                  className="w-full bg-gray-950 border border-gray-750 rounded p-2 text-center text-white"
-              />
-            </div>
+          <div className="space-y-4">
+             <SmartSlider
+                label="Bed Min"
+                value={data.bedTempMin}
+                onChange={(v) => handleChange('bedTempMin', v)}
+                min={20} max={120}
+                safeMin={40} safeMax={70}
+                unit="°C"
+             />
+             <SmartSlider
+                label="Bed Max"
+                value={data.bedTempMax}
+                onChange={(v) => handleChange('bedTempMax', v)}
+                min={20} max={120}
+                safeMin={50} safeMax={80}
+                unit="°C"
+             />
           </div>
         </div>
 
@@ -296,6 +327,25 @@ const LabelEditor: React.FC<LabelEditorProps> = ({
             </select>
           </div>
         </div>
+
+        {/* Custom QR Code Data */}
+        {(settings.includeQr || settings.theme === LabelTheme.SWATCH) && (
+            <div className="mt-4 p-3 bg-gray-900/50 rounded-lg border border-gray-800">
+                <label className="text-xs text-gray-400 uppercase font-bold flex items-center gap-2 mb-2">
+                    <QrCode size={12} className="text-cyan-500"/> Custom QR Content
+                </label>
+                <input
+                    type="text"
+                    value={data.customQrCode || ''}
+                    onChange={(e) => handleChange('customQrCode', e.target.value)}
+                    placeholder={`Leave empty for auto-generated data`}
+                    className="w-full bg-gray-950 border border-gray-700 rounded p-2 text-xs text-white font-mono focus:border-cyan-500 outline-none"
+                />
+                <p className="text-[9px] text-gray-500 mt-1 italic">
+                    Overrides standard Brand/Material/Temp data. Great for reorder URLs.
+                </p>
+            </div>
+        )}
       </div>
 
       {/* --- PRINT CONTROLS --- */}
