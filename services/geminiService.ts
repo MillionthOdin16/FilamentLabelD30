@@ -377,6 +377,7 @@ export const analyzeFilamentImage = async (
                 bedTempMin: 50,
                 bedTempMax: 60,
                 weight: '1kg',
+                diameter: '1.75mm',
                 hygroscopy: 'low' as const,
                 notes: 'Analysis completed but JSON parsing failed. Data extracted from logs.',
                 confidence: 0,
