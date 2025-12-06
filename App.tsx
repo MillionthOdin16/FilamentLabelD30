@@ -227,7 +227,10 @@ const App: React.FC = () => {
       setState(AppState.EDITING);
     } catch (err: any) {
       await ensureMinDisplayTime();
-      setErrorMsg("Could not analyze image automatically. Please enter details manually.");
+      
+      // Show error toast to user
+      toast.error("Image Analysis Failed", err.message || "Could not analyze image automatically. Please enter details manually.");
+      
       setFilamentData(DEFAULT_DATA);
       setState(AppState.EDITING);
     }

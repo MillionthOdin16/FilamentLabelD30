@@ -157,10 +157,21 @@ export const analyzeFilamentImage = async (
     } catch (error) {
         console.warn(`Gemini attempt ${attempt + 1} failed:`, error);
         lastError = error;
+        
+        // Notify UI of retry attempt
+        if (onLog && attempt < MAX_RETRIES) {
+            onLog({ text: `Analysis attempt ${attempt + 1} failed. Retrying...`, color: 'text-yellow-400' });
+        }
+        
         if (attempt < MAX_RETRIES) {
             await new Promise(r => setTimeout(r, 1000 * (attempt + 1))); // Exponential backoff
         }
     }
+  }
+  
+  // Notify UI of final failure
+  if (onLog) {
+      onLog({ text: `Analysis failed after ${MAX_RETRIES + 1} attempts.`, color: 'text-red-400' });
   }
 
   throw new Error(`Failed to analyze label after ${MAX_RETRIES + 1} attempts. ${lastError?.message || ''}`);
