@@ -200,6 +200,9 @@ const App: React.FC = () => {
     setAnalysisBoxes([]);
     setAnalysisSummary('');
     setAnalysisDetectedData({}); // Clear previous detected data
+    
+    // Reset to defaults for new analysis
+    setFilamentData(DEFAULT_DATA);
 
     // Add initial log
     setAnalysisLogs([{ text: "INITIALIZING OPTICAL SCAN...", color: "text-blue-400" }]);
