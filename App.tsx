@@ -268,20 +268,30 @@ const App: React.FC = () => {
             // Update form fields with accumulated data (respecting confidence)
             setFilamentData(prev => {
               const updated = {...prev};
+              console.log('[DEBUG] Progressive update - accumulatedData:', JSON.stringify(accumulatedData));
+              console.log('[DEBUG] Progressive update - prev state:', JSON.stringify(prev));
+              
               Object.keys(accumulatedData).forEach(key => {
                 const k = key as keyof FilamentData;
                 const currentValue = prev[k];
                 const newValue = accumulatedData[k];
                 
+                console.log(`[DEBUG] Field ${k}: current="${currentValue}", new="${newValue}", confidence=${dataConfidence[k]}`);
+                
                 // Update if current is default/empty or new value is better
                 if (!currentValue || currentValue === 'GENERIC' || currentValue === 'White' || 
                     currentValue === '' || currentValue === 'PLA') {
+                  console.log(`[DEBUG] Updating ${k} to "${newValue}" (current is default)`);
                   updated[k] = newValue as any;
                 } else if (dataConfidence[k] > 2) {
                   // High confidence override
+                  console.log(`[DEBUG] Updating ${k} to "${newValue}" (high confidence override)`);
                   updated[k] = newValue as any;
+                } else {
+                  console.log(`[DEBUG] NOT updating ${k} - current value "${currentValue}" kept`);
                 }
               });
+              console.log('[DEBUG] Progressive update - updated state:', JSON.stringify(updated));
               return updated;
             });
           }
@@ -289,12 +299,17 @@ const App: React.FC = () => {
 
       // Merge final JSON data with accumulated real-time data
       // Priority: accumulated real-time data > final JSON data > defaults
+      console.log('[DEBUG] Final merge - data from JSON:', JSON.stringify(data));
+      console.log('[DEBUG] Final merge - accumulatedData:', JSON.stringify(accumulatedData));
+      
       const enrichedData = { 
         ...data, // Start with parsed JSON (may have defaults if parsing failed)
         ...accumulatedData, // Override with accumulated real-time data (highest priority)
         source: data.source || 'Gemini 2.5 Flash',
         notes: analysisSummary ? `${data.notes || ''}${data.notes ? '\n\n' : ''}Analysis findings: ${analysisSummary}` : data.notes
       };
+      
+      console.log('[DEBUG] Final merge - enrichedData:', JSON.stringify(enrichedData));
       
       // Final update with merged data
       setFilamentData(enrichedData);
