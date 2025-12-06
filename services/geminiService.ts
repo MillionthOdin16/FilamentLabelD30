@@ -98,12 +98,12 @@ const SYSTEM_INSTRUCTION = `
 You are an expert 3D Printing Assistant and Materials Engineer. 
 Your task is to accurately identify 3D printer filament specifications from an image of a spool label.
 
-**CRITICAL: You will output structured JSON via responseSchema, BUT you must also provide detailed logging.**
+**CRITICAL: You must provide detailed logging AND output structured JSON at the end.**
 
-**LOGGING FORMAT:**
+**LOGGING FORMAT (for real-time user feedback):**
 1. Every analysis step MUST start with "LOG: " prefix
 2. Every bounding box MUST start with "BOX: " prefix  
-3. Be verbose and detailed in logs - users want to see your thinking process
+3. Be verbose and detailed - users want to see your thinking process
 
 Example logs:
 LOG: Initializing optical character recognition
@@ -120,21 +120,45 @@ LOG: Detected feature: ROCK-LIKE TEXTURE
 LOG: Search results confirm Mars Red hex code and specifications
 LOG: Rock PLA is a composite material with marble powder - may require hardened steel nozzle
 
-**ANALYSIS STEPS:**
-1. **OCR & Text Extraction:** Read ALL visible text on the label. Log each finding.
-2. **Bounding Boxes:** For important text regions (brand, material, temps), output BOX coordinates.
-3. **Google Search Validation:** Search for exact product specs. Log findings.
-4. **Color Analysis:** Analyze visible filament color. Confirm with search.
-5. **Feature Detection:** List all special features mentioned (texture, ease of printing, etc.)
-6. **Technical Details:** Extract diameter, spool weight, length, any warnings about nozzle wear.
-7. **Confidence Assessment:** Evaluate confidence based on label clarity and search validation.
+**FINAL JSON OUTPUT (after all logs):**
+After streaming all your LOG: and BOX: messages, output a complete JSON object with these EXACT fields:
 
-**IMPORTANT NOTES:**
-- Include ALL relevant details in the structured output
-- In 'notes' field: mention if composite/abrasive, recommended nozzle size, texture properties
-- In 'features' array: list marketing features like "EASY TO PRINT", "DURABLE", "BUBBLE FREE"
-- Extract exact values from label when available
-- Use search to fill in missing details (like exact hex codes)
+{
+  "brand": "string - Manufacturer name (e.g., 'OVERTURE', 'eSUN', 'Hatchbox')",
+  "material": "string - Material type with modifiers (e.g., 'ROCK PLA', 'Silk PLA', 'PETG')",
+  "colorName": "string - Color from label (e.g., 'Mars Red', 'Galaxy Black')",
+  "colorHex": "string - Hex code with # (e.g., '#D76D3B') or null",
+  "minTemp": "number - Min nozzle temperature in Celsius",
+  "maxTemp": "number - Max nozzle temperature in Celsius",
+  "bedTempMin": "number - Min bed temperature in Celsius",
+  "bedTempMax": "number - Max bed temperature in Celsius",
+  "weight": "string - Weight with units (e.g., '1kg', '500g') or null",
+  "diameter": "string - Diameter (e.g., '1.75mm', '2.85mm') or null",
+  "spoolWeight": "string - Empty spool weight (e.g., '147g') or null",
+  "length": "string - Filament length (e.g., '300m') or null",
+  "features": "array - Features like ['EASY TO PRINT', 'DURABLE', 'BUBBLE FREE'] or null",
+  "notes": "string - Technical details: abrasiveness, nozzle recommendations, texture, composite info",
+  "hygroscopy": "string - MUST be 'low', 'medium', or 'high'",
+  "confidence": "number - Confidence score 0-100"
+}
+
+**IMPORTANT:**
+- DO NOT wrap JSON in markdown code blocks
+- DO NOT add any text after the JSON
+- Include ALL details you find in appropriate fields
+- In 'notes': mention if composite/abrasive, recommended nozzle size, texture
+- In 'features': list exact marketing features from label
+- Extract exact values when visible on label
+- Use search to validate and fill missing details
+
+**ANALYSIS STEPS:**
+1. OCR & Text Extraction: Read ALL visible text. Log each finding.
+2. Bounding Boxes: For important regions, output BOX coordinates.
+3. Google Search Validation: Search for exact product. Log findings.
+4. Color Analysis: Analyze visible color. Confirm with search.
+5. Feature Detection: List all special features.
+6. Technical Details: Extract diameter, weights, lengths, warnings.
+7. Final JSON: Output complete structured data.
 `;
 
 
@@ -202,20 +226,21 @@ export const analyzeFilamentImage = async (
     try {
         console.log(`Gemini attempt ${attempt + 1}`);
         
-        // Use structured output with streaming for logs
+        // NOTE: We can't use responseSchema with streaming because it forces pure JSON output
+        // This prevents LOG: prefixed messages from appearing, breaking the UX
+        // Instead, we stream logs normally and parse JSON carefully at the end
         const result = await ai.models.generateContentStream({
             model: "gemini-2.5-flash",
             contents: {
                 parts: [
                 { inlineData: { mimeType: "image/jpeg", data: cleanBase64 } },
-                { text: "Analyze this filament spool. Stream detailed logs with LOG: prefix and BOX: prefix for bounding boxes. Be thorough and explain your findings." }
+                { text: "Analyze this filament spool. Stream detailed logs with LOG: prefix and BOX: prefix for bounding boxes. Be thorough and explain your findings. Output final JSON without markdown wrapping." }
                 ]
             },
             config: {
                 systemInstruction: SYSTEM_INSTRUCTION,
-                tools: [{ googleSearch: {} }],
-                responseSchema: FilamentAnalysisSchema,
-                responseMimeType: "application/json"
+                tools: [{ googleSearch: {} }]
+                // NOTE: No responseSchema here - it breaks streaming logs
             }
         });
 
@@ -284,20 +309,14 @@ export const analyzeFilamentImage = async (
             }
         }
 
-        // With structured outputs, the response should be clean JSON
-        // Parse the structured output
-        console.log("Parsing structured output...");
+        // Parse the JSON output (after all LOG: messages)
+        console.log("Parsing JSON output...");
+        
+        let data: FilamentData;
         
         try {
-            // Try to parse the fullText as JSON directly (structured output)
-            structuredData = JSON.parse(fullText);
-        } catch (e) {
-            // Fallback: extract JSON from text
-            console.log("Structured output not pure JSON, extracting...");
-            let text = fullText;
-            
             // Remove logs/boxes from text
-            text = text.replace(/^LOG: .*$/gm, '').replace(/^BOX: .*$/gm, '');
+            let text = fullText.replace(/^LOG: .*$/gm, '').replace(/^BOX: .*$/gm, '');
             
             // Remove markdown
             text = text.replace(/```json/g, '').replace(/```/g, '').trim();
@@ -307,35 +326,42 @@ export const analyzeFilamentImage = async (
             const lastBrace = text.lastIndexOf('}');
             if (firstBrace !== -1 && lastBrace !== -1) {
                 text = text.substring(firstBrace, lastBrace + 1);
-                structuredData = JSON.parse(text);
+                const parsed = JSON.parse(text);
+                
+                // Map to FilamentData with all new fields
+                data = {
+                    brand: parsed.brand || 'GENERIC',
+                    material: parsed.material || 'PLA',
+                    colorName: parsed.colorName || 'Unknown',
+                    colorHex: parsed.colorHex || '#FFFFFF',
+                    minTemp: parsed.minTemp || 200,
+                    maxTemp: parsed.maxTemp || 220,
+                    bedTempMin: parsed.bedTempMin || 50,
+                    bedTempMax: parsed.bedTempMax || 60,
+                    weight: parsed.weight || '1kg',
+                    diameter: parsed.diameter || '1.75mm',
+                    hygroscopy: parsed.hygroscopy || 'low',
+                    notes: parsed.notes || '',
+                    confidence: parsed.confidence || 50,
+                    source: 'Gemini 2.5 Flash'
+                };
+                
+                // Append optional fields to notes if present
+                if (parsed.spoolWeight && !data.notes.includes(parsed.spoolWeight)) {
+                    data.notes = `${data.notes}\nSpool weight: ${parsed.spoolWeight}`.trim();
+                }
+                if (parsed.length && !data.notes.includes(parsed.length)) {
+                    data.notes = `${data.notes}\nLength: ${parsed.length}`.trim();
+                }
+                if (parsed.features && Array.isArray(parsed.features) && parsed.features.length > 0) {
+                    data.notes = `${data.notes}\nFeatures: ${parsed.features.join(', ')}`.trim();
+                }
             } else {
-                throw new Error("No JSON found in response");
+                throw new Error("No JSON object found in response");
             }
-        }
-
-        // Map structured output to FilamentData
-        const data: FilamentData = {
-            brand: structuredData.brand || 'GENERIC',
-            material: structuredData.material || 'PLA',
-            colorName: structuredData.colorName || 'Unknown',
-            colorHex: structuredData.colorHex || '#FFFFFF',
-            minTemp: structuredData.minTemp || 200,
-            maxTemp: structuredData.maxTemp || 220,
-            bedTempMin: structuredData.bedTempMin || 50,
-            bedTempMax: structuredData.bedTempMax || 60,
-            weight: structuredData.weight || '1kg',
-            diameter: structuredData.diameter || '1.75mm',
-            hygroscopy: structuredData.hygroscopy || 'low',
-            notes: structuredData.notes || '',
-            confidence: structuredData.confidence || 50,
-            source: 'Gemini 2.5 Flash'
-        };
-        
-        // Add optional fields if present
-        if (structuredData.spoolWeight) data.notes = `${data.notes}\nSpool weight: ${structuredData.spoolWeight}`.trim();
-        if (structuredData.length) data.notes = `${data.notes}\nLength: ${structuredData.length}`.trim();
-        if (structuredData.features && Array.isArray(structuredData.features)) {
-            data.notes = `${data.notes}\nFeatures: ${structuredData.features.join(', ')}`.trim();
+        } catch (e) {
+            console.error("JSON parsing failed:", e);
+            throw new Error(`Failed to parse JSON: ${e instanceof Error ? e.message : 'Unknown error'}`);
         }
 
         // Extract Grounding Source URL
