@@ -9,6 +9,32 @@ interface AnalysisViewProps {
   boxes: {label: string, rect: number[]}[];
 }
 
+// Constants
+const ESTIMATED_TOTAL_OPERATIONS = 15;
+
+// Helper function to detect processing stage from log content
+const detectProcessingStage = (logs: {text: string}[]): string => {
+  if (logs.length === 0) return 'Initializing';
+  
+  const lastLog = logs[logs.length - 1].text.toLowerCase();
+  
+  if (lastLog.includes('scan') || lastLog.includes('ocr') || lastLog.includes('text')) {
+    return 'Scanning Text';
+  } else if (lastLog.includes('color') || lastLog.includes('analyze')) {
+    return 'Analyzing Color';
+  } else if (lastLog.includes('search') || lastLog.includes('grounding') || lastLog.includes('web')) {
+    return 'Web Search';
+  } else if (lastLog.includes('validat') || lastLog.includes('confirm')) {
+    return 'Validating';
+  } else if (lastLog.includes('complet') || lastLog.includes('done') || lastLog.includes('finish')) {
+    return 'Complete';
+  } else if (lastLog.includes('detect') || lastLog.includes('region')) {
+    return 'Detecting Regions';
+  }
+  
+  return 'Processing';
+};
+
 const AnalysisView: React.FC<AnalysisViewProps> = ({ imageSrc, logs, boxes }) => {
   const scrollRef = useRef<HTMLDivElement>(null);
   const { success } = useToast();
@@ -20,30 +46,9 @@ const AnalysisView: React.FC<AnalysisViewProps> = ({ imageSrc, logs, boxes }) =>
       }
   }, [logs]);
 
-  // Detect processing stage from logs
+  // Update processing stage based on log content
   useEffect(() => {
-    if (logs.length === 0) {
-      setProcessingStage('Initializing');
-      return;
-    }
-    
-    const lastLog = logs[logs.length - 1].text.toLowerCase();
-    
-    if (lastLog.includes('scan') || lastLog.includes('ocr') || lastLog.includes('text')) {
-      setProcessingStage('Scanning Text');
-    } else if (lastLog.includes('color') || lastLog.includes('analyze')) {
-      setProcessingStage('Analyzing Color');
-    } else if (lastLog.includes('search') || lastLog.includes('grounding') || lastLog.includes('web')) {
-      setProcessingStage('Web Search');
-    } else if (lastLog.includes('validat') || lastLog.includes('confirm')) {
-      setProcessingStage('Validating');
-    } else if (lastLog.includes('complet') || lastLog.includes('done') || lastLog.includes('finish')) {
-      setProcessingStage('Complete');
-    } else if (lastLog.includes('detect') || lastLog.includes('region')) {
-      setProcessingStage('Detecting Regions');
-    } else {
-      setProcessingStage('Processing');
-    }
+    setProcessingStage(detectProcessingStage(logs));
   }, [logs]);
 
   const handleCopy = () => {
@@ -116,7 +121,7 @@ const AnalysisView: React.FC<AnalysisViewProps> = ({ imageSrc, logs, boxes }) =>
                 {/* Progress overlay showing processing percentage */}
                 {logs.length > 0 && (
                   <div className="absolute top-2 right-2 bg-black/70 backdrop-blur-sm px-2 py-1 rounded text-[10px] font-mono text-cyan-400 border border-cyan-500/30">
-                    {Math.min(100, Math.floor((logs.length / 15) * 100))}% COMPLETE
+                    {Math.min(100, Math.floor((logs.length / ESTIMATED_TOTAL_OPERATIONS) * 100))}% COMPLETE
                   </div>
                 )}
 
@@ -130,14 +135,14 @@ const AnalysisView: React.FC<AnalysisViewProps> = ({ imageSrc, logs, boxes }) =>
                     const height = (ymax - ymin) / 10 + '%';
                     
                     // Color variations for different boxes
-                    const colors = [
-                      { border: 'border-yellow-400/80', bg: 'bg-yellow-400/10', label: 'bg-yellow-400' },
-                      { border: 'border-green-400/80', bg: 'bg-green-400/10', label: 'bg-green-400' },
-                      { border: 'border-blue-400/80', bg: 'bg-blue-400/10', label: 'bg-blue-400' },
-                      { border: 'border-purple-400/80', bg: 'bg-purple-400/10', label: 'bg-purple-400' },
-                      { border: 'border-pink-400/80', bg: 'bg-pink-400/10', label: 'bg-pink-400' },
+                    const colorSchemes = [
+                      { border: 'border-yellow-400/80', bg: 'bg-yellow-400/10', label: 'bg-yellow-400', shadow: 'rgba(251, 191, 36, 0.3)' },
+                      { border: 'border-green-400/80', bg: 'bg-green-400/10', label: 'bg-green-400', shadow: 'rgba(74, 222, 128, 0.3)' },
+                      { border: 'border-blue-400/80', bg: 'bg-blue-400/10', label: 'bg-blue-400', shadow: 'rgba(96, 165, 250, 0.3)' },
+                      { border: 'border-purple-400/80', bg: 'bg-purple-400/10', label: 'bg-purple-400', shadow: 'rgba(192, 132, 252, 0.3)' },
+                      { border: 'border-pink-400/80', bg: 'bg-pink-400/10', label: 'bg-pink-400', shadow: 'rgba(244, 114, 182, 0.3)' },
                     ];
-                    const colorScheme = colors[i % colors.length];
+                    const colorScheme = colorSchemes[i % colorSchemes.length];
 
                     return (
                         <div
@@ -149,11 +154,7 @@ const AnalysisView: React.FC<AnalysisViewProps> = ({ imageSrc, logs, boxes }) =>
                               width, 
                               height,
                               animationDelay: `${i * 0.1}s`,
-                              boxShadow: `0 0 20px ${colorScheme.border.includes('yellow') ? 'rgba(251, 191, 36, 0.3)' : 
-                                                      colorScheme.border.includes('green') ? 'rgba(74, 222, 128, 0.3)' :
-                                                      colorScheme.border.includes('blue') ? 'rgba(96, 165, 250, 0.3)' :
-                                                      colorScheme.border.includes('purple') ? 'rgba(192, 132, 252, 0.3)' :
-                                                      'rgba(244, 114, 182, 0.3)'}`
+                              boxShadow: `0 0 20px ${colorScheme.shadow}`
                             }}
                         >
                             <div className={`absolute -top-5 left-0 text-[9px] ${colorScheme.label} text-black px-1.5 py-0.5 font-bold uppercase tracking-wider rounded-t-sm shadow-lg animate-pulse`}>
