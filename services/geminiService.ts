@@ -86,12 +86,34 @@ export const analyzeFilamentImage = async (
             const chunkText = chunk.text();
             fullText += chunkText;
 
-            // Process Logs
+            // Process Logs with categorization
             const logMatches = chunkText.match(/LOG: (.*)/g);
             if (logMatches && onLog) {
                 logMatches.forEach(match => {
                     const msg = match.replace('LOG: ', '').trim();
-                    onLog({ text: msg, color: 'text-cyan-400' });
+                    
+                    // Categorize log messages for better visual presentation
+                    let category = 'info';
+                    let color = 'text-cyan-400';
+                    
+                    if (msg.toLowerCase().includes('scanning') || msg.toLowerCase().includes('analyzing')) {
+                        category = 'scan';
+                        color = 'text-blue-400';
+                    } else if (msg.toLowerCase().includes('detected') || msg.toLowerCase().includes('found') || msg.toLowerCase().includes('extracted')) {
+                        category = 'detect';
+                        color = 'text-green-400';
+                    } else if (msg.toLowerCase().includes('search') || msg.toLowerCase().includes('consulting')) {
+                        category = 'search';
+                        color = 'text-purple-400';
+                    } else if (msg.toLowerCase().includes('confirming') || msg.toLowerCase().includes('determining') || msg.toLowerCase().includes('assessing')) {
+                        category = 'validate';
+                        color = 'text-yellow-400';
+                    } else if (msg.toLowerCase().includes('complete') || msg.toLowerCase().includes('finalizing')) {
+                        category = 'complete';
+                        color = 'text-emerald-400';
+                    }
+                    
+                    onLog({ text: msg, color, category });
                 });
             }
 
