@@ -49,26 +49,29 @@ const scoreFinding = (text: string): number => {
   const lowerText = text.toLowerCase();
   let score = 0;
   
-  // High-value content
+  // High-value content - specific data extractions
   if (lowerText.includes('detected brand:') || lowerText.includes('detected material:')) score += 10;
-  if (lowerText.includes('detected color')) score += 9;
-  if (lowerText.includes('hex code') || /#[0-9a-fA-F]{6}/.test(text)) score += 8;
-  if (lowerText.includes('temperature range') || /\d+[-–]\d+°?c/i.test(text)) score += 8;
-  if (lowerText.includes('diameter') || lowerText.includes('weight')) score += 7;
-  if (lowerText.includes('feature:') || lowerText.includes('texture')) score += 6;
+  if (lowerText.includes('detected color name:') || lowerText.includes('detected color:')) score += 9;
+  if (lowerText.includes('hex code:') || /#[0-9a-fA-F]{6}/.test(text)) score += 8;
+  if (lowerText.includes('temperature range:') || /\d+[-–]\d+°?c/i.test(text)) score += 8;
+  if (lowerText.includes('detected diameter') || lowerText.includes('detected weight')) score += 7;
+  if (lowerText.includes('detected feature:') || lowerText.includes('texture')) score += 6;
   
-  // Medium-value confirmations
-  if (lowerText.includes('confirm')) score += 4;
-  if (lowerText.includes('search results')) score += 3;
+  // INCREASED penalties for process metadata (not actual findings)
+  if (lowerText.includes('search results for')) score -= 12; // These are process descriptions, not findings
+  if (lowerText.includes('search results confirm') || lowerText.includes('search results also')) score -= 8;
+  if (lowerText.includes('confirming')) score -= 10; // Process step, not a finding
+  if (lowerText.includes('performing') || lowerText.includes('initiating') || lowerText.includes('conducting')) score -= 10;
+  if (lowerText.includes('search for') && !lowerText.includes('results')) score -= 8;
+  if (lowerText.includes('identifying potential alternatives')) score -= 15;
+  if (lowerText.includes('found manufacturer') || lowerText.includes('other brands offering')) score -= 12;
   
-  // Penalty for generic/low-value
-  if (lowerText.includes('performing') || lowerText.includes('initiating')) score -= 5;
-  if (lowerText.includes('search for') && !lowerText.includes('results')) score -= 3;
-  if (lowerText.includes('identifying potential alternatives')) score -= 10;
+  // Slight boost for confirmations that include actual data
+  if (lowerText.includes('confirm') && (/#[0-9a-fA-F]{6}/.test(text) || /\d+[-–]\d+/.test(text))) score += 2;
   
-  // Length bonus (but not too long)
-  if (text.length > 40 && text.length < 150) score += 2;
-  if (text.length > 150) score -= 2; // Too verbose
+  // Length bonus (but not too long - likely verbose process descriptions)
+  if (text.length > 40 && text.length < 120) score += 2;
+  if (text.length > 150) score -= 5; // Very likely process metadata
   
   return Math.max(0, score);
 };

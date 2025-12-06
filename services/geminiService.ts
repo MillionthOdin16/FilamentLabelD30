@@ -173,38 +173,59 @@ const MIN_LOG_LINE_LENGTH = 5;
 function extractDataFromLog(logText: string): Partial<FilamentData> {
     const result: Partial<FilamentData> = {};
     
-    // Extract brand
-    const brandMatch = logText.match(/(?:brand|manufacturer)[\s:]+([A-Z][A-Za-z0-9\s&®™]+?)(?:\.|$|,)/i);
-    if (brandMatch) result.brand = brandMatch[1].trim();
+    // Extract brand - improved to handle various formats
+    // Matches: "Detected brand: OVERTURE®" or "brand name: Overture" or "Brand is OVERTURE"
+    const brandMatch = logText.match(/(?:detected\s+)?(?:brand|manufacturer)(?:\s+name)?[\s:]+([A-Z][A-Za-z0-9\s&®™-]+?)(?:\s*$|\.|\,|;)/i);
+    if (brandMatch) {
+        const brand = brandMatch[1].trim();
+        // Validate: must be more than just "name" or generic words
+        if (brand.length > 2 && !['name', 'brand', 'manufacturer', 'the', 'is'].includes(brand.toLowerCase())) {
+            result.brand = brand;
+        }
+    }
     
-    // Extract material
-    const materialMatch = logText.match(/(?:material|type)[\s:]+([A-Z][A-Za-z0-9\s+-]+?)(?:\.|$|,)/i);
-    if (materialMatch) result.material = materialMatch[1].trim();
+    // Extract material - improved to handle composite names
+    // Matches: "ROCK PLA", "PLA+", "PETG", "ABS", etc.
+    const materialMatch = logText.match(/(?:detected\s+)?(?:material|type)(?:\s+type)?[\s:]+([A-Z][A-Za-z0-9\s+\-]+?)(?:\s+3D|\s+filament|\s*$|\.|\,|;)/i);
+    if (materialMatch) {
+        const material = materialMatch[1].trim();
+        // Validate: must not be a sentence fragment
+        if (material.length <= 30 && !material.toLowerCase().includes('may not') && !material.toLowerCase().includes('inherently')) {
+            result.material = material;
+        }
+    }
     
-    // Extract color name
-    const colorMatch = logText.match(/(?:color|colour)[\s:]+([A-Za-z\s]+?)(?:\.|$|,|\()/i);
-    if (colorMatch) result.colorName = colorMatch[1].trim();
+    // Extract color name - improved to avoid sentence fragments
+    // Matches: "Mars Red", "Red", "Blue" but not "name on a separate"
+    const colorMatch = logText.match(/(?:detected\s+)?(?:color|colour)(?:\s+name)?[\s:]+([A-Z][A-Za-z\s-]+?)(?:\s*$|\.|\,|;|\(|\s+from)/i);
+    if (colorMatch) {
+        const color = colorMatch[1].trim();
+        // Validate: must be a reasonable color name, not a sentence
+        if (color.length <= 30 && !color.toLowerCase().includes('name on') && !color.toLowerCase().includes('separate')) {
+            result.colorName = color;
+        }
+    }
     
     // Extract color hex (validates format)
     const hexMatch = logText.match(/#([A-Fa-f0-9]{6})/);
     if (hexMatch) result.colorHex = '#' + hexMatch[1].toUpperCase();
     
     // Extract nozzle temperature range (handles various dash types)
-    const nozzleMatch = logText.match(/nozzle\s*(?:temp|temperature)[\s:]*(\d+)\s*[-–—]\s*(\d+)\s*°?C/i);
+    const nozzleMatch = logText.match(/nozzle\s*(?:temp|temperature)(?:\s+range)?[\s:]*(\d+)\s*[-–—]\s*(\d+)\s*°?C/i);
     if (nozzleMatch) {
         result.minTemp = parseInt(nozzleMatch[1]);
         result.maxTemp = parseInt(nozzleMatch[2]);
     }
     
     // Extract bed temperature range (handles various dash types)
-    const bedMatch = logText.match(/bed\s*(?:temp|temperature)[\s:]*(\d+)\s*[-–—]\s*(\d+)\s*°?C/i);
+    const bedMatch = logText.match(/bed\s*(?:temp|temperature)(?:\s+range)?[\s:]*(\d+)\s*[-–—]\s*(\d+)\s*°?C/i);
     if (bedMatch) {
         result.bedTempMin = parseInt(bedMatch[1]);
         result.bedTempMax = parseInt(bedMatch[2]);
     }
     
     // Extract weight
-    const weightMatch = logText.match(/(?:weight|mass)[\s:]*(\d+\.?\d*\s*(?:kg|g|lb))/i);
+    const weightMatch = logText.match(/(?:detected\s+)?(?:weight|mass)(?:\s+range)?[\s:]*(\d+\.?\d*\s*(?:kg|g|lb))/i);
     if (weightMatch) result.weight = weightMatch[1].trim();
     
     return result;
