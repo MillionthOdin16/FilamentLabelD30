@@ -73,6 +73,7 @@ const App: React.FC = () => {
   // Analysis State
   const [analysisLogs, setAnalysisLogs] = useState<{text: string, icon?: any, color?: string}[]>([]);
   const [analysisBoxes, setAnalysisBoxes] = useState<any[]>([]);
+  const [analysisSummary, setAnalysisSummary] = useState<string>('');
 
   // Batch Printing State
   const [batchQueue, setBatchQueue] = useState<PrintJob[]>([]);
@@ -196,6 +197,7 @@ const App: React.FC = () => {
     setState(AppState.ANALYZING);
     setAnalysisLogs([]); // Clear previous logs
     setAnalysisBoxes([]);
+    setAnalysisSummary('');
 
     // Add initial log
     setAnalysisLogs([{ text: "INITIALIZING OPTICAL SCAN...", color: "text-blue-400" }]);
@@ -207,7 +209,13 @@ const App: React.FC = () => {
           (box) => setAnalysisBoxes(prev => [...prev, box])
       );
 
-      const enrichedData = { ...data, source: data.source || 'Gemini 2.5 Flash' };
+      // Enrich data with analysis summary if available
+      const enrichedData = { 
+        ...data, 
+        source: data.source || 'Gemini 2.5 Flash',
+        notes: analysisSummary ? `${data.notes || ''}${data.notes ? '\n\n' : ''}Analysis findings: ${analysisSummary}` : data.notes
+      };
+      
       setFilamentData(enrichedData);
       saveToHistory(enrichedData);
       setState(AppState.EDITING);
@@ -747,6 +755,7 @@ const App: React.FC = () => {
                 imageSrc={capturedImage}
                 logs={analysisLogs}
                 boxes={analysisBoxes}
+                onComplete={setAnalysisSummary}
             />
         )}
 

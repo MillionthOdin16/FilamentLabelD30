@@ -7,6 +7,7 @@ interface AnalysisViewProps {
   imageSrc: string;
   logs: {text: string, icon?: any, color?: string}[];
   boxes: {label: string, rect: number[]}[];
+  onComplete?: (summary: string) => void; // Callback to pass analysis summary
 }
 
 // Constants
@@ -35,10 +36,11 @@ const detectProcessingStage = (logs: {text: string}[]): string => {
   return 'Processing';
 };
 
-const AnalysisView: React.FC<AnalysisViewProps> = ({ imageSrc, logs, boxes }) => {
+const AnalysisView: React.FC<AnalysisViewProps> = ({ imageSrc, logs, boxes, onComplete }) => {
   const scrollRef = useRef<HTMLDivElement>(null);
   const { success } = useToast();
   const [processingStage, setProcessingStage] = useState<string>('Initializing');
+  const [keySummary, setKeySummary] = useState<string[]>([]); // Track key findings
 
   useEffect(() => {
       if (scrollRef.current) {
@@ -50,6 +52,33 @@ const AnalysisView: React.FC<AnalysisViewProps> = ({ imageSrc, logs, boxes }) =>
   useEffect(() => {
     setProcessingStage(detectProcessingStage(logs));
   }, [logs]);
+
+  // Extract key findings from logs
+  useEffect(() => {
+    const newFindings: string[] = [];
+    
+    logs.forEach(log => {
+      const text = log.text;
+      const lowerText = text.toLowerCase();
+      
+      // Capture important findings
+      if (lowerText.includes('detected') || lowerText.includes('found') || 
+          lowerText.includes('identified') || lowerText.includes('extracted')) {
+        // Skip generic messages
+        if (!lowerText.includes('scanning') && !lowerText.includes('analyzing') && 
+            !lowerText.includes('initializing') && text.length > 20) {
+          newFindings.push(text);
+        }
+      }
+    });
+    
+    setKeySummary(newFindings);
+    
+    // Pass summary to parent when complete
+    if (onComplete && processingStage === 'Complete' && newFindings.length > 0) {
+      onComplete(newFindings.join('. '));
+    }
+  }, [logs, processingStage, onComplete]);
 
   const handleCopy = () => {
       const text = logs.map(l => l.text).join('\n');
@@ -171,20 +200,41 @@ const AnalysisView: React.FC<AnalysisViewProps> = ({ imageSrc, logs, boxes }) =>
             </div>
         </div>
 
+        {/* Key Findings Summary */}
+        {keySummary.length > 0 && (
+          <div className="mb-4 bg-gradient-to-r from-cyan-900/20 to-blue-900/20 border border-cyan-700/50 rounded-lg p-4">
+            <div className="flex items-center gap-2 mb-2">
+              <Sparkles size={14} className="text-cyan-400" />
+              <h3 className="text-xs font-bold uppercase tracking-wider text-cyan-400">Key Findings</h3>
+            </div>
+            <div className="space-y-1">
+              {keySummary.slice(-5).map((finding, i) => (
+                <div key={i} className="text-xs text-gray-300 flex items-start gap-2">
+                  <span className="text-cyan-500 shrink-0">•</span>
+                  <span>{finding}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Terminal Output */}
-        <div className="bg-black/90 border border-gray-800 rounded-lg p-4 font-mono text-xs h-56 overflow-hidden shadow-xl backdrop-blur-md flex flex-col">
+        <div className="bg-black/90 border border-gray-800 rounded-lg p-4 font-mono text-xs overflow-hidden shadow-xl backdrop-blur-md flex flex-col" style={{ height: 'calc(100vh - 500px)', minHeight: '320px', maxHeight: '480px' }}>
            <div className="flex items-center justify-between border-b border-gray-800 pb-2 mb-2 shrink-0">
               <div className="flex items-center gap-2">
                 <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></div>
                 <div className="w-2 h-2 rounded-full bg-yellow-500 animate-pulse" style={{animationDelay: '0.1s'}}></div>
                 <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" style={{animationDelay: '0.2s'}}></div>
                 <span className="text-cyan-500 ml-2 font-bold tracking-wider flex items-center gap-2">
-                    <Terminal size={12} /> NEURAL ENGINE LOG
+                    <Terminal size={12} /> ANALYSIS LOG
                 </span>
               </div>
-              <button onClick={handleCopy} className="text-gray-500 hover:text-white transition-colors" title="Copy Logs">
-                  <Copy size={12} />
-              </button>
+              <div className="flex items-center gap-2">
+                <span className="text-gray-500 text-[10px]">{logs.length} entries</span>
+                <button onClick={handleCopy} className="text-gray-500 hover:text-white transition-colors" title="Copy Logs">
+                    <Copy size={12} />
+                </button>
+              </div>
            </div>
            <div ref={scrollRef} className="flex flex-col flex-1 overflow-y-auto custom-scrollbar scroll-smooth">
                {logs.length === 0 && (
@@ -212,7 +262,7 @@ const AnalysisView: React.FC<AnalysisViewProps> = ({ imageSrc, logs, boxes }) =>
                        <div key={i} className="flex items-start gap-2 py-1.5 animate-fade-in border-b border-white/5 last:border-0">
                            <span className="text-gray-600 shrink-0 text-[10px]">[{new Date().toLocaleTimeString().split(' ')[0]}]</span>
                            {icon && <span className="shrink-0 mt-0.5">{icon}</span>}
-                           <span className={`${color} opacity-90 break-words flex-1`}>{log.text}</span>
+                           <span className={`${color} opacity-90 break-words flex-1 leading-relaxed`}>{log.text}</span>
                        </div>
                    )
                })}
