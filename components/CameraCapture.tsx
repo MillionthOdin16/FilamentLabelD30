@@ -1,22 +1,50 @@
 import React, { useRef, useState, useEffect } from 'react';
-import { Camera, X } from 'lucide-react';
+import { Camera, X, Zap, ZapOff, ZoomIn, ZoomOut } from 'lucide-react';
 
 interface CameraCaptureProps {
   onCapture: (imageSrc: string) => void;
   onCancel: () => void;
+  onScanCode?: (code: string) => void;
 }
 
-const CameraCapture: React.FC<CameraCaptureProps> = ({ onCapture, onCancel }) => {
+const CameraCapture: React.FC<CameraCaptureProps> = ({ onCapture, onCancel, onScanCode }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [error, setError] = useState<string>('');
+
+  const [zoom, setZoom] = useState(1);
+  const [torch, setTorch] = useState(false);
+  const [capabilities, setCapabilities] = useState<MediaTrackCapabilities | null>(null);
 
   useEffect(() => {
     startCamera();
     return () => stopCamera();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // QR / Barcode Detection
+  useEffect(() => {
+    if (!onScanCode || !('BarcodeDetector' in window)) return;
+
+    const interval = setInterval(async () => {
+       if (videoRef.current && videoRef.current.readyState === 4) {
+          try {
+             // @ts-ignore - Experimental API
+             const detector = new window.BarcodeDetector({ formats: ['qr_code', 'data_matrix', 'aztec'] });
+             const codes = await detector.detect(videoRef.current);
+             if (codes.length > 0) {
+                 const code = codes[0].rawValue;
+                 if (code) onScanCode(code);
+             }
+          } catch (e) {
+             // Silently fail or log if needed
+          }
+       }
+    }, 500);
+
+    return () => clearInterval(interval);
+  }, [onScanCode]);
 
   const startCamera = async () => {
     try {
@@ -29,6 +57,14 @@ const CameraCapture: React.FC<CameraCaptureProps> = ({ onCapture, onCancel }) =>
       };
       const mediaStream = await navigator.mediaDevices.getUserMedia(constraints);
       setStream(mediaStream);
+
+      const track = mediaStream.getVideoTracks()[0];
+      if (track && track.getCapabilities) {
+          try {
+            setCapabilities(track.getCapabilities());
+          } catch(e) { console.warn("Caps error", e); }
+      }
+
       if (videoRef.current) {
         videoRef.current.srcObject = mediaStream;
       }
@@ -36,6 +72,28 @@ const CameraCapture: React.FC<CameraCaptureProps> = ({ onCapture, onCancel }) =>
       console.error("Camera access error:", err);
       setError("Unable to access camera. Please allow permissions.");
     }
+  };
+
+  const handleZoom = (val: number) => {
+      setZoom(val);
+      if (stream) {
+          const track = stream.getVideoTracks()[0];
+          // @ts-ignore - advanced constraints
+          track.applyConstraints({ advanced: [{ zoom: val }] }).catch(e => console.log(e));
+      }
+  };
+
+  const toggleTorch = () => {
+      const newTorch = !torch;
+      setTorch(newTorch);
+      if (stream) {
+          const track = stream.getVideoTracks()[0];
+          // @ts-ignore - torch constraint
+          track.applyConstraints({ advanced: [{ torch: newTorch }] }).catch(e => {
+              console.log(e);
+              setTorch(!newTorch); // Revert if failed
+          });
+      }
   };
 
   const stopCamera = () => {
@@ -86,13 +144,48 @@ const CameraCapture: React.FC<CameraCaptureProps> = ({ onCapture, onCancel }) =>
             />
             
             {/* Overlay UI */}
-            <div className="absolute top-0 left-0 w-full p-6 flex justify-between items-start bg-gradient-to-b from-black/70 to-transparent">
+            <div className="absolute top-0 left-0 w-full p-6 flex justify-between items-start bg-gradient-to-b from-black/70 to-transparent z-10">
               <button onClick={onCancel} className="p-2 rounded-full bg-black/40 text-white backdrop-blur-md">
                 <X size={24} />
               </button>
+
+              <div className="flex gap-4">
+                {/* Torch Toggle */}
+                {/* @ts-ignore - torch capability check */}
+                {capabilities && capabilities.torch && (
+                    <button
+                        onClick={toggleTorch}
+                        className={`p-2 rounded-full backdrop-blur-md transition-all ${torch ? 'bg-yellow-500 text-black' : 'bg-black/40 text-white'}`}
+                    >
+                        {torch ? <Zap size={24} fill="currentColor" /> : <ZapOff size={24} />}
+                    </button>
+                )}
+
+                {onScanCode && 'BarcodeDetector' in window && (
+                    <div className="bg-black/50 backdrop-blur-md border border-cyan-500/30 px-3 py-1.5 rounded-full flex items-center gap-2 h-10">
+                        <div className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
+                        <span className="text-[10px] font-bold text-cyan-400 uppercase tracking-wide">Smart Scan</span>
+                    </div>
+                )}
+              </div>
             </div>
 
-            <div className="absolute bottom-0 left-0 w-full p-8 flex justify-center items-center bg-gradient-to-t from-black/80 to-transparent">
+            {/* Zoom Controls */}
+            {/* @ts-ignore - zoom capability check */}
+            {capabilities && capabilities.zoom && (
+                <div className="absolute right-6 top-1/2 -translate-y-1/2 flex flex-col items-center gap-4 bg-black/30 backdrop-blur-md p-2 rounded-full z-10">
+                    <button onClick={() => handleZoom(Math.min((capabilities as any).zoom.max, zoom + 0.5))} className="text-white p-1"><ZoomIn size={20} /></button>
+                    <div className="h-32 w-1 relative bg-gray-600 rounded-full">
+                        <div
+                            className="absolute bottom-0 left-0 w-full bg-cyan-400 rounded-full transition-all"
+                            style={{ height: `${((zoom - (capabilities as any).zoom.min) / ((capabilities as any).zoom.max - (capabilities as any).zoom.min)) * 100}%` }}
+                        />
+                    </div>
+                    <button onClick={() => handleZoom(Math.max((capabilities as any).zoom.min, zoom - 0.5))} className="text-white p-1"><ZoomOut size={20} /></button>
+                </div>
+            )}
+
+            <div className="absolute bottom-0 left-0 w-full p-8 flex justify-center items-center bg-gradient-to-t from-black/80 to-transparent z-10">
                <button 
                 onClick={takePhoto}
                 className="w-20 h-20 rounded-full border-4 border-white flex items-center justify-center bg-white/20 active:bg-white/50 transition-all shadow-lg shadow-cyan-500/20"

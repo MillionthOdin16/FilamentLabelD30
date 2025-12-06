@@ -41,9 +41,10 @@ const PrintStatus: React.FC<PrintStatusProps> = ({ step, message, copies = 1, cu
             </div>
           </div>
           <div className="flex-1">
-            <div className="text-green-400 font-bold text-sm">Print Complete!</div>
+            {/* Use message if generic, otherwise default */}
+            <div className="text-green-400 font-bold text-sm">{message || 'Print Complete!'}</div>
             <div className="text-green-200/70 text-xs mt-0.5">
-              {copies > 1 ? `${copies} labels printed successfully` : 'Your label is ready'}
+              {copies > 1 ? `${copies} labels processed` : 'Operation successful'}
             </div>
           </div>
         </div>
