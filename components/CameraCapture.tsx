@@ -4,9 +4,10 @@ import { Camera, X } from 'lucide-react';
 interface CameraCaptureProps {
   onCapture: (imageSrc: string) => void;
   onCancel: () => void;
+  onScanCode?: (code: string) => void;
 }
 
-const CameraCapture: React.FC<CameraCaptureProps> = ({ onCapture, onCancel }) => {
+const CameraCapture: React.FC<CameraCaptureProps> = ({ onCapture, onCancel, onScanCode }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [stream, setStream] = useState<MediaStream | null>(null);
@@ -17,6 +18,29 @@ const CameraCapture: React.FC<CameraCaptureProps> = ({ onCapture, onCancel }) =>
     return () => stopCamera();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // QR / Barcode Detection
+  useEffect(() => {
+    if (!onScanCode || !('BarcodeDetector' in window)) return;
+
+    const interval = setInterval(async () => {
+       if (videoRef.current && videoRef.current.readyState === 4) {
+          try {
+             // @ts-ignore - Experimental API
+             const detector = new window.BarcodeDetector({ formats: ['qr_code', 'data_matrix', 'aztec'] });
+             const codes = await detector.detect(videoRef.current);
+             if (codes.length > 0) {
+                 const code = codes[0].rawValue;
+                 if (code) onScanCode(code);
+             }
+          } catch (e) {
+             // Silently fail or log if needed
+          }
+       }
+    }, 500);
+
+    return () => clearInterval(interval);
+  }, [onScanCode]);
 
   const startCamera = async () => {
     try {
@@ -90,6 +114,13 @@ const CameraCapture: React.FC<CameraCaptureProps> = ({ onCapture, onCancel }) =>
               <button onClick={onCancel} className="p-2 rounded-full bg-black/40 text-white backdrop-blur-md">
                 <X size={24} />
               </button>
+
+              {onScanCode && 'BarcodeDetector' in window && (
+                  <div className="bg-black/50 backdrop-blur-md border border-cyan-500/30 px-3 py-1.5 rounded-full flex items-center gap-2">
+                     <div className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
+                     <span className="text-[10px] font-bold text-cyan-400 uppercase tracking-wide">Smart Scan</span>
+                  </div>
+              )}
             </div>
 
             <div className="absolute bottom-0 left-0 w-full p-8 flex justify-center items-center bg-gradient-to-t from-black/80 to-transparent">

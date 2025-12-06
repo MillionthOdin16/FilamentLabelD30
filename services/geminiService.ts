@@ -29,64 +29,139 @@ The JSON object must have the following keys:
 - confidence (number, 0-100)
 - alternatives (array of objects with brand, material, colorName)
 
-Do not wrap the output in markdown blocks. Return only the raw JSON string.
+**REAL-TIME LOGGING:**
+Before outputting the final JSON, you MUST "think out loud" by printing log lines as you process the image.
+Start every log line with "LOG: ".
+Start every bounding box detection with "BOX: ".
+Format:
+LOG: <Action description>
+BOX: <Label> [ymin, xmin, ymax, xmax] (0-1000 scale)
+
+Example:
+LOG: Scanning image for text regions...
+LOG: Detected brand logo "Overture".
+BOX: Brand [100, 200, 150, 400]
+LOG: Analyzing color spectrum...
+
+Finally, output the JSON object.
+Do not wrap the output in markdown blocks.
 `;
 
-export const analyzeFilamentImage = async (base64Image: string): Promise<FilamentData> => {
+const MAX_RETRIES = 2;
+
+export const analyzeFilamentImage = async (
+    base64Image: string,
+    onLog?: (log: {text: string, color: string}) => void,
+    onBox?: (box: {label: string, rect: number[]}) => void
+): Promise<FilamentData> => {
   const apiKey = process.env.API_KEY;
   if (!apiKey) {
     throw new Error("API Key not found");
   }
 
   const ai = new GoogleGenAI({ apiKey });
+  const cleanBase64 = base64Image.replace(/^data:image\/(png|jpg|jpeg|webp);base64,/, "");
 
-  try {
-    const cleanBase64 = base64Image.replace(/^data:image\/(png|jpg|jpeg|webp);base64,/, "");
+  let lastError: any;
 
-    const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
-      contents: {
-        parts: [
-          { inlineData: { mimeType: "image/jpeg", data: cleanBase64 } },
-          { text: "Analyze this filament spool. Use Google Search to verify specs. Return valid JSON only." }
-        ]
-      },
-      config: {
-        systemInstruction: SYSTEM_INSTRUCTION,
-        // responseMimeType and responseSchema are NOT supported when using tools
-        tools: [{ googleSearch: {} }] 
-      }
-    });
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    try {
+        const result = await ai.models.generateContentStream({
+            model: "gemini-2.5-flash",
+            contents: {
+                parts: [
+                { inlineData: { mimeType: "image/jpeg", data: cleanBase64 } },
+                { text: "Analyze this filament spool. Stream your thought process logs and bounding boxes, then output the final JSON." }
+                ]
+            },
+            config: {
+                systemInstruction: SYSTEM_INSTRUCTION,
+                tools: [{ googleSearch: {} }]
+            }
+        });
 
-    let text = response.text;
-    if (!text) throw new Error("No data returned from AI");
-    
-    // Clean potentially markdown-formatted JSON
-    text = text.replace(/```json/g, '').replace(/```/g, '').trim();
-    
-    const data = JSON.parse(text) as FilamentData;
+        let fullText = '';
 
-    // Extract Grounding Source URL
-    let referenceUrl = '';
-    const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks;
-    if (chunks && chunks.length > 0) {
-        // Try to find the first Web chunk with a URI
-        for (const chunk of chunks) {
-            if (chunk.web?.uri) {
-                referenceUrl = chunk.web.uri;
-                break;
+        for await (const chunk of result.stream) {
+            const chunkText = chunk.text();
+            fullText += chunkText;
+
+            // Process Logs
+            const logMatches = chunkText.match(/LOG: (.*)/g);
+            if (logMatches && onLog) {
+                logMatches.forEach(match => {
+                    const msg = match.replace('LOG: ', '').trim();
+                    onLog({ text: msg, color: 'text-cyan-400' });
+                });
+            }
+
+            // Process Boxes
+            const boxMatches = chunkText.match(/BOX: (.*?) \[([\d,\s]+)\]/g);
+            if (boxMatches && onBox) {
+                boxMatches.forEach(match => {
+                    // Re-parse the specific line to be safe
+                    const parts = match.match(/BOX: (.*?) \[([\d,\s]+)\]/);
+                    if (parts) {
+                        const label = parts[1];
+                        const coords = parts[2].split(',').map(n => parseInt(n.trim()));
+                        if (coords.length === 4) onBox({ label, rect: coords });
+                    }
+                });
             }
         }
-    }
-    
-    if (referenceUrl) {
-        data.referenceUrl = referenceUrl;
-        data.source = new URL(referenceUrl).hostname.replace('www.', '');
-    }
 
-    return data;
-  } catch (error) {
-    console.error("Gemini Analysis Error:", error);
-    throw new Error("Failed to analyze filament label.");
+        // Final extraction
+        let text = fullText;
+
+        // Remove logs/boxes from text before parsing JSON
+        text = text.replace(/^LOG: .*$/gm, '').replace(/^BOX: .*$/gm, '');
+
+        // Robust JSON Extraction
+        // 1. Remove markdown
+        text = text.replace(/```json/g, '').replace(/```/g, '').trim();
+        // 2. Find first brace and last brace
+        const firstBrace = text.indexOf('{');
+        const lastBrace = text.lastIndexOf('}');
+        if (firstBrace !== -1 && lastBrace !== -1) {
+            text = text.substring(firstBrace, lastBrace + 1);
+        } else {
+             throw new Error("No JSON found in response");
+        }
+
+        const data = JSON.parse(text) as FilamentData;
+
+        // Extract Grounding Source URL (From the final response object, usually available after stream)
+        const response = await result.response;
+        let referenceUrl = '';
+        const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks;
+        if (chunks && chunks.length > 0) {
+            for (const chunk of chunks) {
+                if (chunk.web?.uri) {
+                    referenceUrl = chunk.web.uri;
+                    break;
+                }
+            }
+        }
+
+        if (referenceUrl) {
+            data.referenceUrl = referenceUrl;
+            try {
+                data.source = new URL(referenceUrl).hostname.replace('www.', '');
+            } catch (e) {
+                data.source = 'Web Search';
+            }
+        }
+
+        return data;
+
+    } catch (error) {
+        console.warn(`Gemini attempt ${attempt + 1} failed:`, error);
+        lastError = error;
+        if (attempt < MAX_RETRIES) {
+            await new Promise(r => setTimeout(r, 1000 * (attempt + 1))); // Exponential backoff
+        }
+    }
   }
+
+  throw new Error(`Failed to analyze label after ${MAX_RETRIES + 1} attempts. ${lastError?.message || ''}`);
 };

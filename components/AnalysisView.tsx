@@ -1,51 +1,15 @@
 
-import React, { useEffect, useState } from 'react';
-import { Scan, Cpu, Database, Search, CheckCircle2, Wifi, Zap } from 'lucide-react';
+import React from 'react';
+import { Scan, Cpu, Database, Search, CheckCircle2, Wifi, Zap, Terminal } from 'lucide-react';
 
 interface AnalysisViewProps {
   imageSrc: string;
+  logs: {text: string, icon?: any, color?: string}[];
+  boxes: {label: string, rect: number[]}[];
 }
 
-const LOG_STEPS = [
-  { text: "INITIALIZING OPTICAL SCAN...", icon: Scan, color: "text-blue-400" },
-  { text: "ISOLATING LABEL REGION...", icon: Zap, color: "text-cyan-400" },
-  { text: "READING SPOOL QR/BARCODE...", icon: Search, color: "text-cyan-300" },
-  { text: "EXTRACTING BRAND TEXT...", icon: Database, color: "text-purple-400" },
-  { text: "DETECTING MATERIAL (PLA/PETG)...", icon: Cpu, color: "text-pink-400" },
-  { text: "CROSS-REFERENCING VENDOR DB...", icon: Wifi, color: "text-emerald-400" },
-  { text: "VERIFYING SLICER PROFILES...", icon: Database, color: "text-yellow-400" },
-  { text: "FORMATTING LABEL DATA...", icon: CheckCircle2, color: "text-green-400" },
-];
-
-const AnalysisView: React.FC<AnalysisViewProps> = ({ imageSrc }) => {
-  const [logIndex, setLogIndex] = useState(0);
-  const [progress, setProgress] = useState(0);
-
-  useEffect(() => {
-    // Animate Logs using an index counter to avoid array state race conditions
-    const logInterval = setInterval(() => {
-      setLogIndex(prev => {
-        if (prev < LOG_STEPS.length) return prev + 1;
-        return prev;
-      });
-    }, 450); // Slightly slower for readability
-
-    // Animate Progress
-    const progressInterval = setInterval(() => {
-      setProgress(prev => {
-        if (prev >= 98) return 99;
-        return prev + Math.floor(Math.random() * 5) + 1;
-      });
-    }, 150);
-
-    return () => {
-      clearInterval(logInterval);
-      clearInterval(progressInterval);
-    };
-  }, []);
-
-  // Derived state for display
-  const visibleLogs = LOG_STEPS.slice(0, logIndex);
+const AnalysisView: React.FC<AnalysisViewProps> = ({ imageSrc, logs, boxes }) => {
+  // Auto-scroll logic could be added here if needed, but flex-col-reverse handles it.
 
   return (
     <div className="fixed inset-0 z-50 bg-gray-950 flex flex-col overflow-hidden">
@@ -64,52 +28,76 @@ const AnalysisView: React.FC<AnalysisViewProps> = ({ imageSrc }) => {
         <div className="flex justify-between items-start mb-12">
            <div>
              <h2 className="text-2xl font-black tracking-widest text-cyan-500 animate-pulse">ANALYZING</h2>
-             <p className="text-xs font-mono text-cyan-800">FILAMENT-ID // V3.0</p>
+             <p className="text-xs font-mono text-cyan-800">GEMINI VISION // REAL-TIME</p>
            </div>
            <div className="text-right">
-             <div className="text-4xl font-black font-mono text-white">{progress}%</div>
-             <div className="text-xs text-cyan-600 font-bold">MATCH PROBABILITY</div>
+             <div className="text-4xl font-black font-mono text-white animate-pulse">
+                {logs.length > 0 ? 'PROCESSING' : 'CONNECTING'}
+             </div>
+             <div className="text-xs text-cyan-600 font-bold">LIVE FEED</div>
            </div>
         </div>
 
         {/* Central Scanner Visual */}
         <div className="flex-1 relative flex items-center justify-center mb-12">
-            <div className="relative w-64 h-64 border-2 border-cyan-500/30 rounded-lg overflow-hidden shadow-2xl shadow-cyan-500/20 bg-black/50 backdrop-blur-md">
+            <div className="relative w-full max-w-sm aspect-square border-2 border-cyan-500/30 rounded-lg overflow-hidden shadow-2xl shadow-cyan-500/20 bg-black/50 backdrop-blur-md">
                 <img src={imageSrc} className="w-full h-full object-cover" alt="Target" />
                 <div className="scan-line"></div>
                 
                 {/* Corner Markers */}
-                <div className="absolute top-0 left-0 w-4 h-4 border-t-2 border-l-2 border-cyan-400"></div>
-                <div className="absolute top-0 right-0 w-4 h-4 border-t-2 border-r-2 border-cyan-400"></div>
-                <div className="absolute bottom-0 left-0 w-4 h-4 border-b-2 border-l-2 border-cyan-400"></div>
-                <div className="absolute bottom-0 right-0 w-4 h-4 border-b-2 border-r-2 border-cyan-400"></div>
+                <div className="absolute top-0 left-0 w-6 h-6 border-t-2 border-l-2 border-cyan-400"></div>
+                <div className="absolute top-0 right-0 w-6 h-6 border-t-2 border-r-2 border-cyan-400"></div>
+                <div className="absolute bottom-0 left-0 w-6 h-6 border-b-2 border-l-2 border-cyan-400"></div>
+                <div className="absolute bottom-0 right-0 w-6 h-6 border-b-2 border-r-2 border-cyan-400"></div>
 
-                {/* Simulated Detection Rects */}
-                <div className="absolute top-1/3 left-1/4 w-32 h-8 border border-yellow-400/60 bg-yellow-400/10 animate-pulse">
-                    <div className="absolute -top-3 left-0 text-[8px] bg-yellow-400 text-black px-1 font-bold">DETECTED: BRAND</div>
-                </div>
+                {/* Real-time Bounding Boxes */}
+                {boxes.map((box, i) => {
+                    // Gemini 0-1000 scale: [ymin, xmin, ymax, xmax]
+                    const [ymin, xmin, ymax, xmax] = box.rect;
+                    const top = ymin / 10 + '%';
+                    const left = xmin / 10 + '%';
+                    const width = (xmax - xmin) / 10 + '%';
+                    const height = (ymax - ymin) / 10 + '%';
+
+                    return (
+                        <div
+                            key={i}
+                            className="absolute border-2 border-yellow-400/80 bg-yellow-400/10 animate-fade-in-scale"
+                            style={{ top, left, width, height }}
+                        >
+                            <div className="absolute -top-4 left-0 text-[9px] bg-yellow-400 text-black px-1.5 py-0.5 font-bold uppercase tracking-wider rounded-t-sm shadow-lg">
+                                {box.label}
+                            </div>
+                        </div>
+                    );
+                })}
             </div>
         </div>
 
         {/* Terminal Output */}
-        <div className="bg-black/80 border border-gray-800 rounded-lg p-4 font-mono text-xs h-48 overflow-hidden shadow-xl backdrop-blur-md">
-           <div className="flex items-center gap-2 border-b border-gray-800 pb-2 mb-2">
-              <div className="w-2 h-2 rounded-full bg-red-500"></div>
-              <div className="w-2 h-2 rounded-full bg-yellow-500"></div>
-              <div className="w-2 h-2 rounded-full bg-green-500"></div>
-              <span className="text-gray-500 ml-2">DATA STREAM</span>
+        <div className="bg-black/90 border border-gray-800 rounded-lg p-4 font-mono text-xs h-48 overflow-hidden shadow-xl backdrop-blur-md flex flex-col">
+           <div className="flex items-center gap-2 border-b border-gray-800 pb-2 mb-2 shrink-0">
+              <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></div>
+              <div className="w-2 h-2 rounded-full bg-yellow-500 animate-pulse" style={{animationDelay: '0.1s'}}></div>
+              <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" style={{animationDelay: '0.2s'}}></div>
+              <span className="text-cyan-500 ml-2 font-bold tracking-wider flex items-center gap-2">
+                  <Terminal size={12} /> NEURAL ENGINE LOG
+              </span>
            </div>
-           <div className="flex flex-col-reverse h-full overflow-hidden">
-               {visibleLogs.slice().reverse().map((log, i) => {
-                   if (!log) return null;
-                   const Icon = log.icon;
+           <div className="flex flex-col-reverse flex-1 overflow-y-auto custom-scrollbar">
+               {logs.slice().reverse().map((log, i) => {
+                   const Icon = log.icon || Zap;
+                   const color = log.color || 'text-cyan-400';
                    return (
-                       <div key={i} className="flex items-center gap-3 py-1 animate-fade-in-up">
-                           {Icon && <Icon size={12} className={log.color} />}
-                           <span className={`${log.color} opacity-80`}>{log.text}</span>
+                       <div key={i} className="flex items-start gap-3 py-1.5 animate-fade-in border-b border-white/5 last:border-0">
+                           <span className="text-gray-600 shrink-0">[{new Date().toLocaleTimeString().split(' ')[0]}]</span>
+                           <span className={`${color} opacity-90 break-words`}>{log.text}</span>
                        </div>
                    )
                })}
+               {logs.length === 0 && (
+                   <div className="text-gray-600 italic py-2">Waiting for data stream...</div>
+               )}
            </div>
         </div>
 
