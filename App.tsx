@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { flushSync } from 'react-dom';
 import { Camera, Printer, RotateCcw, PenTool, Loader2, Info, Bluetooth, Ruler, History, ArrowRight, Battery, BatteryFull, BatteryLow, BatteryMedium, ExternalLink, AlertTriangle, Eye, X, Download, Upload, Image as ImageIcon, Edit3, CheckCircle2, Sparkles, Package, Layout, BarChart3, Layers, PlusCircle, Scan } from 'lucide-react';
 import { AppState, FilamentData, LABEL_PRESETS, LabelPreset, PrintSettings, HistoryEntry, LabelTheme, PrinterInfo, PrintJob, LabelTemplate } from './types';
 import { analyzeFilamentImage } from './services/geminiService';
@@ -192,13 +193,24 @@ const App: React.FC = () => {
   };
 
   const handleImageCaptured = async (imageSrc: string) => {
-    setCapturedImage(imageSrc);
-    setState(AppState.ANALYZING);
-    setAnalysisLogs([]); // Clear previous logs
-    setAnalysisBoxes([]);
+    // Use flushSync to force React to render the ANALYZING state immediately
+    flushSync(() => {
+      setCapturedImage(imageSrc);
+      setState(AppState.ANALYZING);
+      setAnalysisLogs([{ text: "INITIALIZING OPTICAL SCAN...", color: "text-blue-400" }]);
+      setAnalysisBoxes([]);
+    });
 
-    // Add initial log
-    setAnalysisLogs([{ text: "INITIALIZING OPTICAL SCAN...", color: "text-blue-400" }]);
+    const startTime = Date.now();
+    const minDisplayTime = 1000; // Show analyzing view for at least 1 second
+    
+    // Helper to ensure minimum display time
+    const ensureMinDisplayTime = async () => {
+      const elapsed = Date.now() - startTime;
+      if (elapsed < minDisplayTime) {
+        await new Promise(resolve => setTimeout(resolve, minDisplayTime - elapsed));
+      }
+    };
 
     try {
       const data = await analyzeFilamentImage(
@@ -210,9 +222,15 @@ const App: React.FC = () => {
       const enrichedData = { ...data, source: data.source || 'Gemini 2.5 Flash' };
       setFilamentData(enrichedData);
       saveToHistory(enrichedData);
+      
+      await ensureMinDisplayTime();
       setState(AppState.EDITING);
     } catch (err: any) {
-      setErrorMsg("Could not analyze image automatically. Please enter details manually.");
+      await ensureMinDisplayTime();
+      
+      // Show error toast to user
+      toast.error("Image Analysis Failed", err.message || "Could not analyze image automatically. Please enter details manually.");
+      
       setFilamentData(DEFAULT_DATA);
       setState(AppState.EDITING);
     }
