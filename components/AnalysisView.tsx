@@ -44,6 +44,35 @@ const detectProcessingStage = (logs: {text: string}[]): string => {
   return 'Processing';
 };
 
+// Helper function to score the quality of a finding
+const scoreFinding = (text: string): number => {
+  const lowerText = text.toLowerCase();
+  let score = 0;
+  
+  // High-value content
+  if (lowerText.includes('detected brand:') || lowerText.includes('detected material:')) score += 10;
+  if (lowerText.includes('detected color')) score += 9;
+  if (lowerText.includes('hex code') || /#[0-9a-fA-F]{6}/.test(text)) score += 8;
+  if (lowerText.includes('temperature range') || /\d+[-–]\d+°?c/i.test(text)) score += 8;
+  if (lowerText.includes('diameter') || lowerText.includes('weight')) score += 7;
+  if (lowerText.includes('feature:') || lowerText.includes('texture')) score += 6;
+  
+  // Medium-value confirmations
+  if (lowerText.includes('confirm')) score += 4;
+  if (lowerText.includes('search results')) score += 3;
+  
+  // Penalty for generic/low-value
+  if (lowerText.includes('performing') || lowerText.includes('initiating')) score -= 5;
+  if (lowerText.includes('search for') && !lowerText.includes('results')) score -= 3;
+  if (lowerText.includes('identifying potential alternatives')) score -= 10;
+  
+  // Length bonus (but not too long)
+  if (text.length > 40 && text.length < 150) score += 2;
+  if (text.length > 150) score -= 2; // Too verbose
+  
+  return Math.max(0, score);
+};
+
 // Helper function to check if a log entry is a key finding
 const isKeyFinding = (text: string): boolean => {
   const lowerText = text.toLowerCase();
@@ -52,23 +81,27 @@ const isKeyFinding = (text: string): boolean => {
   const hasActionWord = lowerText.includes('detected') || 
                         lowerText.includes('found') || 
                         lowerText.includes('identified') || 
-                        lowerText.includes('extracted');
+                        lowerText.includes('extracted') ||
+                        lowerText.includes('hex code');
   
   // Also match specific data patterns (brand, material, color, temps, etc.)
-  const hasDataPattern = /(?:brand|material|color|nozzle|bed|temp|weight|diameter|spool)[\s:]+/i.test(text);
+  const hasDataPattern = /(?:brand|material|color|nozzle|bed|temp|weight|diameter|spool|feature)[\s:]+/i.test(text);
   
   // Skip generic progress messages
   const isGenericMessage = lowerText.includes('scanning') || 
                            lowerText.includes('analyzing') || 
                            lowerText.includes('initializing') ||
                            lowerText.includes('initiating') ||
+                           lowerText.includes('performing') ||
                            lowerText.includes('validating') ||
+                           lowerText.includes('identifying potential') ||
                            lowerText.includes('finalizing');
   
-  // Must be substantive
+  // Must be substantive and have a positive score
   const isSubstantive = text.length > MIN_SUBSTANTIVE_TEXT_LENGTH;
+  const hasValue = scoreFinding(text) > 3;
   
-  return isSubstantive && (hasActionWord || hasDataPattern) && !isGenericMessage;
+  return isSubstantive && (hasActionWord || hasDataPattern) && !isGenericMessage && hasValue;
 };
 
 const AnalysisView: React.FC<AnalysisViewProps> = ({ imageSrc, logs, boxes, onComplete, detectedData }) => {
@@ -92,19 +125,40 @@ const AnalysisView: React.FC<AnalysisViewProps> = ({ imageSrc, logs, boxes, onCo
   useEffect(() => {
     const newFindings: string[] = [];
     
+    // Process only new logs since last check
     logs.forEach(log => {
       if (isKeyFinding(log.text)) {
-        newFindings.push(log.text);
+        // Only add if not already present (avoid duplicates)
+        if (!keySummary.includes(log.text)) {
+          newFindings.push(log.text);
+        }
       }
     });
     
-    setKeySummary(newFindings);
+    if (newFindings.length > 0) {
+      // Accumulate findings, don't replace
+      const allFindings = [...keySummary, ...newFindings];
+      
+      // Score and sort all findings
+      const scoredFindings = allFindings.map(finding => ({
+        text: finding,
+        score: scoreFinding(finding)
+      }));
+      
+      // Keep top 8 findings sorted by score
+      const topFindings = scoredFindings
+        .sort((a, b) => b.score - a.score)
+        .slice(0, 8)
+        .map(f => f.text);
+      
+      setKeySummary(topFindings);
+    }
     
     // Pass summary to parent when complete
-    if (onComplete && processingStage === 'Complete' && newFindings.length > 0) {
-      onComplete(newFindings.join('. '));
+    if (onComplete && processingStage === 'Complete' && keySummary.length > 0) {
+      onComplete(keySummary.join('. '));
     }
-  }, [logs, processingStage, onComplete]);
+  }, [logs.length, processingStage, onComplete]); // Only trigger on log count change, not every log content change
 
   const handleCopy = () => {
       const text = logs.map(l => l.text).join('\n');
@@ -276,18 +330,19 @@ const AnalysisView: React.FC<AnalysisViewProps> = ({ imageSrc, logs, boxes, onCo
           </div>
         )}
 
-        {/* Key Findings Summary */}
+        {/* Key Findings Summary - Shows best findings */}
         {keySummary.length > 0 && (
-          <div className="mb-4 bg-gradient-to-r from-cyan-900/20 to-blue-900/20 border border-cyan-700/50 rounded-lg p-4">
+          <div className="bg-gradient-to-r from-cyan-900/30 to-blue-900/30 border border-cyan-700/50 rounded-lg p-3">
             <div className="flex items-center gap-2 mb-2">
-              <Sparkles size={14} className="text-cyan-400" />
-              <h3 className="text-xs font-bold uppercase tracking-wider text-cyan-400">Key Findings</h3>
+              <Sparkles size={12} className="text-cyan-400" />
+              <h3 className="text-[10px] md:text-xs font-bold uppercase tracking-wide text-cyan-400">Key Findings</h3>
+              <span className="ml-auto text-[9px] text-cyan-600">{keySummary.length}</span>
             </div>
             <div className="space-y-1">
-              {keySummary.slice(-5).map((finding, i) => (
-                <div key={i} className="text-xs text-gray-300 flex items-start gap-2">
-                  <span className="text-cyan-500 shrink-0">•</span>
-                  <span>{finding}</span>
+              {keySummary.slice(0, 5).map((finding, i) => (
+                <div key={i} className="text-[10px] md:text-xs text-gray-300 flex items-start gap-1.5">
+                  <span className="text-cyan-500 shrink-0 text-xs">•</span>
+                  <span className="leading-relaxed">{finding}</span>
                 </div>
               ))}
             </div>
