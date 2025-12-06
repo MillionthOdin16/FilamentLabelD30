@@ -247,3 +247,10 @@ body {
 .transition-smooth {
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
+
+/* Analysis terminal responsive height */
+.analysis-terminal {
+  height: calc(100vh - 500px);
+  min-height: 320px;
+  max-height: 480px;
+}

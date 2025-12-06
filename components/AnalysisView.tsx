@@ -36,6 +36,27 @@ const detectProcessingStage = (logs: {text: string}[]): string => {
   return 'Processing';
 };
 
+// Helper function to check if a log entry is a key finding
+const isKeyFinding = (text: string): boolean => {
+  const lowerText = text.toLowerCase();
+  
+  // Must contain one of these action words
+  const hasActionWord = lowerText.includes('detected') || 
+                        lowerText.includes('found') || 
+                        lowerText.includes('identified') || 
+                        lowerText.includes('extracted');
+  
+  // Skip generic progress messages
+  const isGenericMessage = lowerText.includes('scanning') || 
+                           lowerText.includes('analyzing') || 
+                           lowerText.includes('initializing');
+  
+  // Must be substantive (>20 chars)
+  const isSubstantive = text.length > 20;
+  
+  return hasActionWord && !isGenericMessage && isSubstantive;
+};
+
 const AnalysisView: React.FC<AnalysisViewProps> = ({ imageSrc, logs, boxes, onComplete }) => {
   const scrollRef = useRef<HTMLDivElement>(null);
   const { success } = useToast();
@@ -58,17 +79,8 @@ const AnalysisView: React.FC<AnalysisViewProps> = ({ imageSrc, logs, boxes, onCo
     const newFindings: string[] = [];
     
     logs.forEach(log => {
-      const text = log.text;
-      const lowerText = text.toLowerCase();
-      
-      // Capture important findings
-      if (lowerText.includes('detected') || lowerText.includes('found') || 
-          lowerText.includes('identified') || lowerText.includes('extracted')) {
-        // Skip generic messages
-        if (!lowerText.includes('scanning') && !lowerText.includes('analyzing') && 
-            !lowerText.includes('initializing') && text.length > 20) {
-          newFindings.push(text);
-        }
+      if (isKeyFinding(log.text)) {
+        newFindings.push(log.text);
       }
     });
     
@@ -219,7 +231,7 @@ const AnalysisView: React.FC<AnalysisViewProps> = ({ imageSrc, logs, boxes, onCo
         )}
 
         {/* Terminal Output */}
-        <div className="bg-black/90 border border-gray-800 rounded-lg p-4 font-mono text-xs overflow-hidden shadow-xl backdrop-blur-md flex flex-col" style={{ height: 'calc(100vh - 500px)', minHeight: '320px', maxHeight: '480px' }}>
+        <div className="bg-black/90 border border-gray-800 rounded-lg p-4 font-mono text-xs overflow-hidden shadow-xl backdrop-blur-md flex flex-col analysis-terminal">
            <div className="flex items-center justify-between border-b border-gray-800 pb-2 mb-2 shrink-0">
               <div className="flex items-center gap-2">
                 <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></div>
