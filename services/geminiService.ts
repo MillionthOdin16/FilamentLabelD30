@@ -54,9 +54,6 @@ export const analyzeFilamentImage = async (
     onLog?: (log: {text: string, color: string}) => void,
     onBox?: (box: {label: string, rect: number[]}) => void
 ): Promise<FilamentData> => {
-  // Yield to event loop to allow React to render state updates
-  await new Promise(resolve => setTimeout(resolve, 0));
-  
   const apiKey = process.env.API_KEY;
   if (!apiKey) {
     throw new Error("API Key not found");

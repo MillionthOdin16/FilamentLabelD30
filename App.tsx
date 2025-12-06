@@ -203,6 +203,14 @@ const App: React.FC = () => {
 
     const startTime = Date.now();
     const minDisplayTime = 1000; // Show analyzing view for at least 1 second
+    
+    // Helper to ensure minimum display time
+    const ensureMinDisplayTime = async () => {
+      const elapsed = Date.now() - startTime;
+      if (elapsed < minDisplayTime) {
+        await new Promise(resolve => setTimeout(resolve, minDisplayTime - elapsed));
+      }
+    };
 
     try {
       const data = await analyzeFilamentImage(
@@ -215,20 +223,10 @@ const App: React.FC = () => {
       setFilamentData(enrichedData);
       saveToHistory(enrichedData);
       
-      // Ensure minimum display time
-      const elapsed = Date.now() - startTime;
-      if (elapsed < minDisplayTime) {
-        await new Promise(resolve => setTimeout(resolve, minDisplayTime - elapsed));
-      }
-      
+      await ensureMinDisplayTime();
       setState(AppState.EDITING);
     } catch (err: any) {
-      // Ensure minimum display time even on error
-      const elapsed = Date.now() - startTime;
-      if (elapsed < minDisplayTime) {
-        await new Promise(resolve => setTimeout(resolve, minDisplayTime - elapsed));
-      }
-      
+      await ensureMinDisplayTime();
       setErrorMsg("Could not analyze image automatically. Please enter details manually.");
       setFilamentData(DEFAULT_DATA);
       setState(AppState.EDITING);
