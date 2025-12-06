@@ -204,8 +204,9 @@ const App: React.FC = () => {
     // Add initial log
     setAnalysisLogs([{ text: "INITIALIZING OPTICAL SCAN...", color: "text-blue-400" }]);
 
-    // Track detected data in real-time
+    // Track detected data with confidence scoring
     let accumulatedData: Partial<FilamentData> = {};
+    let dataConfidence: Record<string, number> = {}; // Track confidence for each field
 
     try {
       const data = await analyzeFilamentImage(
@@ -213,17 +214,73 @@ const App: React.FC = () => {
           (log) => setAnalysisLogs(prev => [...prev, log]),
           (box) => setAnalysisBoxes(prev => [...prev, box]),
           (partialData) => {
-            // Merge newly detected data
-            accumulatedData = { ...accumulatedData, ...partialData };
+            // Smart merging: allow updates if new data seems more specific/accurate
+            Object.keys(partialData).forEach(key => {
+              const k = key as keyof FilamentData;
+              const oldValue = accumulatedData[k];
+              const newValue = partialData[k];
+              
+              if (!newValue) return; // Skip empty values
+              
+              // Calculate confidence score for new value
+              let confidence = 1;
+              
+              // Higher confidence for longer, more specific values
+              if (typeof newValue === 'string') {
+                confidence = Math.min(newValue.length / 10, 3); // Longer = more confident
+                
+                // Brand-specific logic
+                if (k === 'brand') {
+                  const lowerValue = newValue.toLowerCase();
+                  // Penalize generic/reseller terms
+                  if (lowerValue.includes('amazon') || lowerValue.includes('reseller') || 
+                      lowerValue.includes('seller') || lowerValue.includes('generic')) {
+                    confidence *= 0.1; // Very low confidence
+                  }
+                  // Boost manufacturer names with ® or ™
+                  if (newValue.includes('®') || newValue.includes('™')) {
+                    confidence *= 2;
+                  }
+                }
+                
+                // Material-specific logic
+                if (k === 'material') {
+                  // Prefer specific materials (ROCK PLA > PLA)
+                  if (newValue.split(' ').length > 1) {
+                    confidence *= 1.5; // Composite/specific material
+                  }
+                }
+              }
+              
+              // Update if: no existing value OR new value has higher confidence
+              if (!oldValue || !dataConfidence[k] || confidence > dataConfidence[k]) {
+                accumulatedData[k] = newValue as any;
+                dataConfidence[k] = confidence;
+              }
+            });
             
             // Update live detection display
-            setAnalysisDetectedData(accumulatedData);
+            setAnalysisDetectedData({...accumulatedData});
             
-            // Update form fields immediately as data is detected
-            setFilamentData(prev => ({
-              ...prev,
-              ...partialData
-            }));
+            // Update form fields with accumulated data (respecting confidence)
+            setFilamentData(prev => {
+              const updated = {...prev};
+              Object.keys(accumulatedData).forEach(key => {
+                const k = key as keyof FilamentData;
+                const currentValue = prev[k];
+                const newValue = accumulatedData[k];
+                
+                // Update if current is default/empty or new value is better
+                if (!currentValue || currentValue === 'GENERIC' || currentValue === 'White' || 
+                    currentValue === '' || currentValue === 'PLA') {
+                  updated[k] = newValue as any;
+                } else if (dataConfidence[k] > 2) {
+                  // High confidence override
+                  updated[k] = newValue as any;
+                }
+              });
+              return updated;
+            });
           }
       );
 

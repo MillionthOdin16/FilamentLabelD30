@@ -126,62 +126,60 @@ const AnalysisView: React.FC<AnalysisViewProps> = ({ imageSrc, logs, boxes, onCo
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-gray-950 flex flex-col overflow-hidden">
+    <div className="fixed inset-0 z-50 bg-gray-950 flex flex-col overflow-auto">
       
       {/* Background Image with Overlay */}
-      <div className="absolute inset-0 z-0">
-        <img src={imageSrc} className="w-full h-full object-cover opacity-30 blur-sm scale-110" alt="Scanning" />
-        <div className="absolute inset-0 bg-gradient-to-b from-gray-950 via-gray-950/80 to-gray-950"></div>
-        <div className="absolute inset-0 scan-grid opacity-20"></div>
+      <div className="fixed inset-0 z-0">
+        <img src={imageSrc} className="w-full h-full object-cover opacity-20 blur-sm scale-110" alt="Scanning" />
+        <div className="absolute inset-0 bg-gradient-to-b from-gray-950 via-gray-950/90 to-gray-950"></div>
       </div>
 
-      {/* Main Content */}
-      <div className="relative z-10 flex flex-col h-full p-6">
+      {/* Main Content - Scrollable */}
+      <div className="relative z-10 flex flex-col min-h-full p-4 md:p-6 space-y-4">
         
-        {/* Header HUD */}
-        <div className="flex justify-between items-start mb-8">
+        {/* Compact Header */}
+        <div className="flex justify-between items-center flex-wrap gap-2">
            <div>
-             <h2 className="text-2xl font-black tracking-widest text-cyan-500 animate-pulse">ANALYZING</h2>
-             <p className="text-xs font-mono text-cyan-800">GEMINI VISION // REAL-TIME</p>
+             <h2 className="text-xl md:text-2xl font-black tracking-wide text-cyan-500">ANALYZING</h2>
+             <p className="text-[10px] md:text-xs font-mono text-cyan-700">GEMINI VISION</p>
            </div>
            <div className="text-right">
-             <div className="flex items-center gap-3 justify-end">
+             <div className="flex items-center gap-2 justify-end">
                <div className="text-cyan-400 animate-pulse">
                  {getStageIcon()}
                </div>
-               <div className="text-2xl font-black font-mono text-white">
+               <div className="text-sm md:text-xl font-bold font-mono text-white">
                   {processingStage.toUpperCase()}
                </div>
              </div>
-             <div className="text-xs text-cyan-600 font-bold mt-1">
-               {logs.length} operations • {boxes.length} regions
+             <div className="text-[10px] md:text-xs text-cyan-600 font-bold mt-0.5">
+               {logs.length} ops • {boxes.length} regions
              </div>
            </div>
         </div>
 
-        {/* Central Scanner Visual */}
-        <div className="flex-1 relative flex items-center justify-center mb-8">
-            <div className="relative w-full max-w-sm aspect-square border-2 border-cyan-500/30 rounded-lg overflow-hidden shadow-2xl shadow-cyan-500/20 bg-black/50 backdrop-blur-md">
-                <img src={imageSrc} className="w-full h-full object-cover" alt="Target" />
-                
-                {/* Animated scan line with enhanced glow */}
-                <div className="scan-line"></div>
-                
-                {/* Corner Markers with pulse */}
-                <div className="absolute top-0 left-0 w-6 h-6 border-t-2 border-l-2 border-cyan-400 animate-pulse"></div>
-                <div className="absolute top-0 right-0 w-6 h-6 border-t-2 border-r-2 border-cyan-400 animate-pulse" style={{animationDelay: '0.1s'}}></div>
-                <div className="absolute bottom-0 left-0 w-6 h-6 border-b-2 border-l-2 border-cyan-400 animate-pulse" style={{animationDelay: '0.2s'}}></div>
-                <div className="absolute bottom-0 right-0 w-6 h-6 border-b-2 border-r-2 border-cyan-400 animate-pulse" style={{animationDelay: '0.3s'}}></div>
+        {/* Image Preview - Compact */}
+        <div className="relative w-full max-w-md mx-auto aspect-square border-2 border-cyan-500/30 rounded-lg overflow-hidden shadow-xl bg-black/50">
+            <img src={imageSrc} className="w-full h-full object-cover" alt="Target" />
+            
+            {/* Simplified scan line */}
+            <div className="scan-line"></div>
+            
+            {/* Corner Markers */}
+            <div className="absolute top-0 left-0 w-4 h-4 border-t-2 border-l-2 border-cyan-400"></div>
+            <div className="absolute top-0 right-0 w-4 h-4 border-t-2 border-r-2 border-cyan-400"></div>
+            <div className="absolute bottom-0 left-0 w-4 h-4 border-b-2 border-l-2 border-cyan-400"></div>
+            <div className="absolute bottom-0 right-0 w-4 h-4 border-b-2 border-r-2 border-cyan-400"></div>
 
-                {/* Progress overlay showing processing percentage */}
-                {logs.length > 0 && (
-                  <div className="absolute top-2 right-2 bg-black/70 backdrop-blur-sm px-2 py-1 rounded text-[10px] font-mono text-cyan-400 border border-cyan-500/30">
-                    {Math.min(100, Math.floor((logs.length / ESTIMATED_TOTAL_OPERATIONS) * 100))}% COMPLETE
-                  </div>
-                )}
+            {/* Progress Badge */}
+            {logs.length > 0 && (
+              <div className="absolute top-2 right-2 bg-black/80 backdrop-blur-sm px-2 py-1 rounded text-[10px] font-mono text-cyan-400 border border-cyan-500/50">
+                {Math.min(100, Math.floor((logs.length / ESTIMATED_TOTAL_OPERATIONS) * 100))}%
+              </div>
+            )}
 
-                {/* Real-time Bounding Boxes with enhanced styling and animations */}
-                {boxes.map((box, i) => {
+            {/* Real-time Bounding Boxes with enhanced styling and animations */}
+            {boxes.map((box, i) => {
                     // Gemini 0-1000 scale: [ymin, xmin, ymax, xmax]
                     const [ymin, xmin, ymax, xmax] = box.rect;
                     const top = ymin / 10 + '%';
@@ -223,57 +221,55 @@ const AnalysisView: React.FC<AnalysisViewProps> = ({ imageSrc, logs, boxes, onCo
                         </div>
                     );
                 })}
-            </div>
         </div>
 
-        {/* Live Detected Data Panel */}
+        {/* Live Detected Data Panel - Simplified and Compact */}
         {detectedData && Object.keys(detectedData).length > 0 && (
-          <div className="mb-4 bg-gradient-to-r from-green-900/20 to-emerald-900/20 border border-green-700/50 rounded-lg p-4">
-            <div className="flex items-center gap-2 mb-3">
-              <Zap size={14} className="text-green-400 animate-pulse" />
-              <h3 className="text-xs font-bold uppercase tracking-wider text-green-400">Live Detection</h3>
-              <div className="ml-auto text-[10px] text-green-600 font-mono">REAL-TIME</div>
+          <div className="bg-gradient-to-r from-green-900/30 to-emerald-900/30 border border-green-700/50 rounded-lg p-3">
+            <div className="flex items-center gap-2 mb-2">
+              <Zap size={12} className="text-green-400" />
+              <h3 className="text-[10px] md:text-xs font-bold uppercase tracking-wide text-green-400">Detected</h3>
             </div>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-2 gap-2 text-xs">
               {detectedData.brand && (
-                <div className="bg-black/30 rounded px-2 py-1.5 animate-fade-in">
-                  <div className="text-[9px] text-gray-500 uppercase mb-0.5">Brand</div>
-                  <div className="text-xs text-green-300 font-medium">{detectedData.brand}</div>
+                <div className="bg-black/40 rounded px-2 py-1">
+                  <div className="text-[9px] text-gray-500 uppercase">Brand</div>
+                  <div className="text-green-300 font-medium truncate">{detectedData.brand}</div>
                 </div>
               )}
               {detectedData.material && (
-                <div className="bg-black/30 rounded px-2 py-1.5 animate-fade-in">
-                  <div className="text-[9px] text-gray-500 uppercase mb-0.5">Material</div>
-                  <div className="text-xs text-green-300 font-medium">{detectedData.material}</div>
+                <div className="bg-black/40 rounded px-2 py-1">
+                  <div className="text-[9px] text-gray-500 uppercase">Material</div>
+                  <div className="text-green-300 font-medium truncate">{detectedData.material}</div>
                 </div>
               )}
               {detectedData.colorName && (
-                <div className="bg-black/30 rounded px-2 py-1.5 animate-fade-in">
-                  <div className="text-[9px] text-gray-500 uppercase mb-0.5">Color</div>
-                  <div className="text-xs text-green-300 font-medium flex items-center gap-1.5">
+                <div className="bg-black/40 rounded px-2 py-1">
+                  <div className="text-[9px] text-gray-500 uppercase">Color</div>
+                  <div className="text-green-300 font-medium flex items-center gap-1">
                     {detectedData.colorHex && isValidHexColor(detectedData.colorHex) && (
-                      <div className="w-3 h-3 rounded-sm border border-white/20" style={{backgroundColor: detectedData.colorHex}}></div>
+                      <div className="w-3 h-3 rounded-sm border border-white/20 shrink-0" style={{backgroundColor: detectedData.colorHex}}></div>
                     )}
-                    {detectedData.colorName}
+                    <span className="truncate">{detectedData.colorName}</span>
                   </div>
                 </div>
               )}
               {detectedData.minTemp && detectedData.maxTemp && (
-                <div className="bg-black/30 rounded px-2 py-1.5 animate-fade-in">
-                  <div className="text-[9px] text-gray-500 uppercase mb-0.5">Nozzle Temp</div>
-                  <div className="text-xs text-green-300 font-medium">{detectedData.minTemp}-{detectedData.maxTemp}°C</div>
+                <div className="bg-black/40 rounded px-2 py-1">
+                  <div className="text-[9px] text-gray-500 uppercase">Nozzle</div>
+                  <div className="text-green-300 font-medium">{detectedData.minTemp}-{detectedData.maxTemp}°C</div>
                 </div>
               )}
               {detectedData.bedTempMin && detectedData.bedTempMax && (
-                <div className="bg-black/30 rounded px-2 py-1.5 animate-fade-in">
-                  <div className="text-[9px] text-gray-500 uppercase mb-0.5">Bed Temp</div>
-                  <div className="text-xs text-green-300 font-medium">{detectedData.bedTempMin}-{detectedData.bedTempMax}°C</div>
+                <div className="bg-black/40 rounded px-2 py-1">
+                  <div className="text-[9px] text-gray-500 uppercase">Bed</div>
+                  <div className="text-green-300 font-medium">{detectedData.bedTempMin}-{detectedData.bedTempMax}°C</div>
                 </div>
               )}
               {detectedData.weight && (
-                <div className="bg-black/30 rounded px-2 py-1.5 animate-fade-in">
-                  <div className="text-[9px] text-gray-500 uppercase mb-0.5">Weight</div>
-                  <div className="text-xs text-green-300 font-medium">{detectedData.weight}</div>
+                <div className="bg-black/40 rounded px-2 py-1">
+                  <div className="text-[9px] text-gray-500 uppercase">Weight</div>
+                  <div className="text-green-300 font-medium">{detectedData.weight}</div>
                 </div>
               )}
             </div>
@@ -298,51 +294,47 @@ const AnalysisView: React.FC<AnalysisViewProps> = ({ imageSrc, logs, boxes, onCo
           </div>
         )}
 
-        {/* Terminal Output */}
-        <div className="bg-black/90 border border-gray-800 rounded-lg p-4 font-mono text-xs overflow-hidden shadow-xl backdrop-blur-md flex flex-col analysis-terminal">
+        {/* Terminal Output - Compact and Scrollable */}
+        <div className="bg-black/90 border border-gray-800 rounded-lg p-3 font-mono text-xs overflow-hidden shadow-xl flex flex-col" style={{minHeight: '200px', maxHeight: '300px'}}>
            <div className="flex items-center justify-between border-b border-gray-800 pb-2 mb-2 shrink-0">
               <div className="flex items-center gap-2">
-                <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></div>
-                <div className="w-2 h-2 rounded-full bg-yellow-500 animate-pulse" style={{animationDelay: '0.1s'}}></div>
-                <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" style={{animationDelay: '0.2s'}}></div>
-                <span className="text-cyan-500 ml-2 font-bold tracking-wider flex items-center gap-2">
-                    <Terminal size={12} /> ANALYSIS LOG
+                <div className="w-1.5 h-1.5 rounded-full bg-green-500"></div>
+                <span className="text-cyan-500 font-bold text-[10px] md:text-xs flex items-center gap-1.5">
+                    <Terminal size={10} /> LOG
                 </span>
               </div>
               <div className="flex items-center gap-2">
-                <span className="text-gray-500 text-[10px]">{logs.length} entries</span>
-                <button onClick={handleCopy} className="text-gray-500 hover:text-white transition-colors" title="Copy Logs">
+                <span className="text-gray-500 text-[9px] md:text-[10px]">{logs.length}</span>
+                <button onClick={handleCopy} className="text-gray-400 hover:text-white transition-colors p-1 hover:bg-gray-800 rounded" title="Copy">
                     <Copy size={12} />
                 </button>
               </div>
            </div>
-           <div ref={scrollRef} className="flex flex-col flex-1 overflow-y-auto custom-scrollbar scroll-smooth">
+           <div ref={scrollRef} className="flex flex-col flex-1 overflow-y-auto custom-scrollbar">
                {logs.length === 0 && (
-                   <div className="text-gray-600 italic py-2 flex items-center gap-2">
-                     <div className="w-1.5 h-1.5 bg-cyan-500 rounded-full animate-pulse"></div>
-                     Waiting for data stream...
+                   <div className="text-gray-600 italic py-2 text-[10px]">
+                     Waiting...
                    </div>
                )}
                {logs.map((log, i) => {
                    const color = log.color || 'text-cyan-400';
-                   // Add icon indicators for special log types
                    let icon = null;
                    const text = log.text.toLowerCase();
                    if (text.includes('detect') || text.includes('found')) {
-                     icon = <Target size={10} className="text-green-400" />;
+                     icon = <Target size={8} className="text-green-400" />;
                    } else if (text.includes('search') || text.includes('web')) {
-                     icon = <Search size={10} className="text-blue-400" />;
+                     icon = <Search size={8} className="text-blue-400" />;
                    } else if (text.includes('validat') || text.includes('confirm')) {
-                     icon = <CheckCircle2 size={10} className="text-green-400" />;
+                     icon = <CheckCircle2 size={8} className="text-green-400" />;
                    } else if (text.includes('scan') || text.includes('analyz')) {
-                     icon = <Eye size={10} className="text-yellow-400" />;
+                     icon = <Eye size={8} className="text-yellow-400" />;
                    }
                    
                    return (
-                       <div key={i} className="flex items-start gap-2 py-1.5 animate-fade-in border-b border-white/5 last:border-0">
+                       <div key={i} className="flex items-start gap-1.5 py-1 border-b border-white/5 last:border-0">
                            <span className="text-gray-600 shrink-0 text-[10px]">[{new Date().toLocaleTimeString().split(' ')[0]}]</span>
-                           {icon && <span className="shrink-0 mt-0.5">{icon}</span>}
-                           <span className={`${color} opacity-90 break-words flex-1 leading-relaxed`}>{log.text}</span>
+                           {icon && <span className="shrink-0">{icon}</span>}
+                           <span className={`${color} opacity-90 break-words flex-1 text-[10px] md:text-xs leading-relaxed`}>{log.text}</span>
                        </div>
                    )
                })}
