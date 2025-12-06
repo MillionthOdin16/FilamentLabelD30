@@ -74,6 +74,7 @@ const App: React.FC = () => {
   const [analysisLogs, setAnalysisLogs] = useState<{text: string, icon?: any, color?: string}[]>([]);
   const [analysisBoxes, setAnalysisBoxes] = useState<any[]>([]);
   const [analysisSummary, setAnalysisSummary] = useState<string>('');
+  const [analysisDetectedData, setAnalysisDetectedData] = useState<Partial<FilamentData>>({});
 
   // Batch Printing State
   const [batchQueue, setBatchQueue] = useState<PrintJob[]>([]);
@@ -198,6 +199,7 @@ const App: React.FC = () => {
     setAnalysisLogs([]); // Clear previous logs
     setAnalysisBoxes([]);
     setAnalysisSummary('');
+    setAnalysisDetectedData({}); // Clear previous detected data
 
     // Add initial log
     setAnalysisLogs([{ text: "INITIALIZING OPTICAL SCAN...", color: "text-blue-400" }]);
@@ -213,6 +215,9 @@ const App: React.FC = () => {
           (partialData) => {
             // Merge newly detected data
             accumulatedData = { ...accumulatedData, ...partialData };
+            
+            // Update live detection display
+            setAnalysisDetectedData(accumulatedData);
             
             // Update form fields immediately as data is detected
             setFilamentData(prev => ({
@@ -769,6 +774,7 @@ const App: React.FC = () => {
                 logs={analysisLogs}
                 boxes={analysisBoxes}
                 onComplete={setAnalysisSummary}
+                detectedData={analysisDetectedData}
             />
         )}
 

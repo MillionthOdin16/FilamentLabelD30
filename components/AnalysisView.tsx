@@ -2,12 +2,14 @@
 import React, { useRef, useEffect, useState } from 'react';
 import { Scan, Cpu, Database, Search, CheckCircle2, Wifi, Zap, Terminal, Copy, Eye, Target, Brain, Sparkles } from 'lucide-react';
 import { useToast } from './ToastProvider';
+import { FilamentData } from '../types';
 
 interface AnalysisViewProps {
   imageSrc: string;
   logs: {text: string, icon?: any, color?: string}[];
   boxes: {label: string, rect: number[]}[];
   onComplete?: (summary: string) => void; // Callback to pass analysis summary
+  detectedData?: Partial<FilamentData>; // Real-time detected data
 }
 
 // Constants
@@ -63,7 +65,7 @@ const isKeyFinding = (text: string): boolean => {
   return isSubstantive && (hasActionWord || hasDataPattern) && !isGenericMessage;
 };
 
-const AnalysisView: React.FC<AnalysisViewProps> = ({ imageSrc, logs, boxes, onComplete }) => {
+const AnalysisView: React.FC<AnalysisViewProps> = ({ imageSrc, logs, boxes, onComplete, detectedData }) => {
   const scrollRef = useRef<HTMLDivElement>(null);
   const { success } = useToast();
   const [processingStage, setProcessingStage] = useState<string>('Initializing');
@@ -217,6 +219,60 @@ const AnalysisView: React.FC<AnalysisViewProps> = ({ imageSrc, logs, boxes, onCo
                 })}
             </div>
         </div>
+
+        {/* Live Detected Data Panel */}
+        {detectedData && Object.keys(detectedData).length > 0 && (
+          <div className="mb-4 bg-gradient-to-r from-green-900/20 to-emerald-900/20 border border-green-700/50 rounded-lg p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <Zap size={14} className="text-green-400 animate-pulse" />
+              <h3 className="text-xs font-bold uppercase tracking-wider text-green-400">Live Detection</h3>
+              <div className="ml-auto text-[10px] text-green-600 font-mono">REAL-TIME</div>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              {detectedData.brand && (
+                <div className="bg-black/30 rounded px-2 py-1.5 animate-fade-in">
+                  <div className="text-[9px] text-gray-500 uppercase mb-0.5">Brand</div>
+                  <div className="text-xs text-green-300 font-medium">{detectedData.brand}</div>
+                </div>
+              )}
+              {detectedData.material && (
+                <div className="bg-black/30 rounded px-2 py-1.5 animate-fade-in">
+                  <div className="text-[9px] text-gray-500 uppercase mb-0.5">Material</div>
+                  <div className="text-xs text-green-300 font-medium">{detectedData.material}</div>
+                </div>
+              )}
+              {detectedData.colorName && (
+                <div className="bg-black/30 rounded px-2 py-1.5 animate-fade-in">
+                  <div className="text-[9px] text-gray-500 uppercase mb-0.5">Color</div>
+                  <div className="text-xs text-green-300 font-medium flex items-center gap-1.5">
+                    {detectedData.colorHex && (
+                      <div className="w-3 h-3 rounded-sm border border-white/20" style={{backgroundColor: detectedData.colorHex}}></div>
+                    )}
+                    {detectedData.colorName}
+                  </div>
+                </div>
+              )}
+              {detectedData.minTemp && detectedData.maxTemp && (
+                <div className="bg-black/30 rounded px-2 py-1.5 animate-fade-in">
+                  <div className="text-[9px] text-gray-500 uppercase mb-0.5">Nozzle Temp</div>
+                  <div className="text-xs text-green-300 font-medium">{detectedData.minTemp}-{detectedData.maxTemp}°C</div>
+                </div>
+              )}
+              {detectedData.bedTempMin && detectedData.bedTempMax && (
+                <div className="bg-black/30 rounded px-2 py-1.5 animate-fade-in">
+                  <div className="text-[9px] text-gray-500 uppercase mb-0.5">Bed Temp</div>
+                  <div className="text-xs text-green-300 font-medium">{detectedData.bedTempMin}-{detectedData.bedTempMax}°C</div>
+                </div>
+              )}
+              {detectedData.weight && (
+                <div className="bg-black/30 rounded px-2 py-1.5 animate-fade-in">
+                  <div className="text-[9px] text-gray-500 uppercase mb-0.5">Weight</div>
+                  <div className="text-xs text-green-300 font-medium">{detectedData.weight}</div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Key Findings Summary */}
         {keySummary.length > 0 && (
