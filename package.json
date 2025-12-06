@@ -11,7 +11,7 @@
     "test:e2e": "playwright test"
   },
   "dependencies": {
-    "@google/genai": "^1.30.0",
+    "@google/genai": "^1.31.0",
     "lucide-react": "^0.554.0",
     "qrcode": "1.5.3",
     "react": "^19.2.0",

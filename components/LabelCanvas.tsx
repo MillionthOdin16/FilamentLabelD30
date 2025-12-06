@@ -35,12 +35,13 @@ const LabelCanvas: React.FC<LabelCanvasProps> = ({
     const render = async () => {
       const canvas = canvasRef.current;
       if (!canvas) return;
+      if (!data) return; // Safety check
 
       const ctx = canvas.getContext('2d');
       if (!ctx) return;
 
-      const width = Math.round(widthMm * MM_TO_PX);
-      const height = Math.round(heightMm * MM_TO_PX);
+      const width = Math.round(widthMm * MM_TO_PX * scale);
+      const height = Math.round(heightMm * MM_TO_PX * scale);
 
       if (canvas.width !== width || canvas.height !== height) {
         canvas.width = width;
@@ -49,7 +50,7 @@ const LabelCanvas: React.FC<LabelCanvasProps> = ({
 
       // Base Scaling Factor
       const baseSize = Math.min(width, height * 2.5);
-      const s = baseSize / 380;
+      const s = (baseSize / 380) * scale; // Adjust scaling by prop
 
       const bg = settings.invert ? 'black' : 'white';
       const fg = settings.invert ? 'white' : 'black';
@@ -62,18 +63,28 @@ const LabelCanvas: React.FC<LabelCanvasProps> = ({
       ctx.lineCap = 'round';
 
       // --- MARGINS ---
-      const isNano = height < 80; // approx 10mm height threshold
-      const isMicro = height < 142; // approx 18mm height threshold
+      const isNano = height < (80 * scale);
+      const isMicro = height < (142 * scale);
       const userMargin = settings.marginMm || 1;
 
-      let marginPx = userMargin * MM_TO_PX;
-      if (isNano) marginPx = 2; // Force minimal margin for nano labels (approx 0.25mm)
-      else if (isMicro) marginPx = Math.min(1, userMargin) * MM_TO_PX;
+      let marginPx = userMargin * MM_TO_PX * scale;
+      if (isNano) marginPx = 2 * scale;
+      else if (isMicro) marginPx = Math.min(1, userMargin) * MM_TO_PX * scale;
 
       const safeWidth = width - (marginPx * 2);
       const safeHeight = height - (marginPx * 2);
       const startX = marginPx;
       const startY = marginPx;
+
+      // Safely access data properties
+      const brand = (data.brand || '').toUpperCase();
+      const material = (data.material || '').toUpperCase();
+      const colorName = data.colorName || '';
+      const weight = data.weight || '';
+      const minTemp = data.minTemp || 0;
+      const maxTemp = data.maxTemp || 0;
+      const bedTempMin = data.bedTempMin || 0;
+      const bedTempMax = data.bedTempMax || 0;
 
       // --- HELPERS ---
 
@@ -108,7 +119,7 @@ const LabelCanvas: React.FC<LabelCanvasProps> = ({
         if (size > h * 0.90) size = h * 0.90;
 
         // Min size constraint
-        const minSize = isNano ? 6 : (isMicro ? 8 : 12 * s);
+        const minSize = isNano ? 6 * scale : (isMicro ? 8 * scale : 12 * s);
         size = Math.max(size, minSize);
 
         ctx.font = `${weight} ${size}px ${family}`;
@@ -151,11 +162,11 @@ const LabelCanvas: React.FC<LabelCanvasProps> = ({
 
         const cx = x + size / 2;
         const cy = y + size / 2;
-        const scale = size / 24;
+        const scaleFactor = size / 24;
 
         ctx.save();
         ctx.translate(cx, cy);
-        ctx.scale(scale, scale);
+        ctx.scale(scaleFactor, scaleFactor);
 
         if (type === 'nozzle') {
           ctx.moveTo(-3, 6); ctx.lineTo(0, 10); ctx.lineTo(3, 6);
@@ -216,6 +227,7 @@ const LabelCanvas: React.FC<LabelCanvasProps> = ({
 
       // Color utility helpers
       const lightenColor = (hex: string, percent: number): string => {
+        if (!hex || !hex.startsWith('#')) return '#888888';
         const num = parseInt(hex.replace('#', ''), 16);
         const r = Math.min(255, ((num >> 16) + percent));
         const g = Math.min(255, (((num >> 8) & 0x00FF) + percent));
@@ -224,6 +236,7 @@ const LabelCanvas: React.FC<LabelCanvasProps> = ({
       };
 
       const isLightColor = (hex: string): boolean => {
+        if (!hex || !hex.startsWith('#')) return true;
         const num = parseInt(hex.replace('#', ''), 16);
         const r = (num >> 16);
         const g = ((num >> 8) & 0x00FF);
@@ -233,24 +246,23 @@ const LabelCanvas: React.FC<LabelCanvasProps> = ({
       };
 
       // Brand & Material Intelligence
-      const isPremiumBrand = (brand: string): boolean => {
+      const isPremiumBrand = (brandStr: string): boolean => {
         // Only return true for extremely well known premium brands to avoid clutter
         const premium = ['Polymaker', 'Prusament', 'Bambu', 'Atomic', 'Proto-pasta'];
-        return premium.some(p => brand.toLowerCase().includes(p.toLowerCase()));
-        return premium.some(p => brand.toLowerCase().includes(p.toLowerCase()));
+        return premium.some(p => brandStr.toLowerCase().includes(p.toLowerCase()));
       };
 
-      const getMaterialIcon = (material: string): string => {
-        if (material.includes('CF') || material.includes('Carbon')) return '⚙️';
-        if (material.includes('TPU') || material.includes('Flex')) return '🔄';
-        if (material.includes('Silk')) return '✨';
-        if (material.includes('Wood')) return '🌳';
-        if (material.includes('Metal')) return '⚡';
-        if (material.includes('Glow')) return '💡';
+      const getMaterialIcon = (mat: string): string => {
+        if (mat.includes('CF') || mat.includes('CARBON')) return '⚙️';
+        if (mat.includes('TPU') || mat.includes('FLEX')) return '🔄';
+        if (mat.includes('SILK')) return '✨';
+        if (mat.includes('WOOD')) return '🌳';
+        if (mat.includes('METAL')) return '⚡';
+        if (mat.includes('GLOW')) return '💡';
         return '';
       };
 
-      const getHygroscopyWarning = (hygroscopy: string): { show: boolean; text: string; color: string } => {
+      const getHygroscopyWarning = (hygroscopy?: string): { show: boolean; text: string; color: string } => {
         if (hygroscopy === 'high') return { show: true, text: '⚠️ KEEP DRY', color: '#FF4444' };
         if (hygroscopy === 'medium') return { show: true, text: '💧 SENSITIVE', color: '#FF8800' };
         return { show: false, text: '', color: '' };
@@ -262,7 +274,7 @@ const LabelCanvas: React.FC<LabelCanvasProps> = ({
       if (shouldQr) {
         try {
           // Use custom QR code if provided, otherwise default format
-          const qrData = data.customQrCode || `${data.brand}|${data.material}|${data.minTemp}-${data.maxTemp}`;
+          const qrData = data.customQrCode || `${brand}|${material}|${minTemp}-${maxTemp}`;
           const url = await QRCode.toDataURL(qrData, {
             margin: 0,
             errorCorrectionLevel: 'M',
@@ -289,8 +301,8 @@ const LabelCanvas: React.FC<LabelCanvasProps> = ({
           const contentX = startX + colorW + (4 * s);
           const contentW = safeWidth - colorW - (4 * s);
 
-          drawTextFit(data.material, contentX, startY, contentW * 0.6, safeHeight, '900', 30 * s, 'sans-serif', fg, 'left', 'middle');
-          drawTextFit(`${data.minTemp}-${data.maxTemp}°`, contentX + (contentW * 0.6), startY, contentW * 0.4, safeHeight, 'bold', 20 * s, 'monospace', fg, 'right', 'middle');
+          drawTextFit(material, contentX, startY, contentW * 0.6, safeHeight, '900', 30 * s, 'sans-serif', fg, 'left', 'middle');
+          drawTextFit(`${minTemp}-${maxTemp}°`, contentX + (contentW * 0.6), startY, contentW * 0.4, safeHeight, 'bold', 20 * s, 'monospace', fg, 'right', 'middle');
           return;
         }
 
@@ -310,8 +322,8 @@ const LabelCanvas: React.FC<LabelCanvasProps> = ({
           const weightW = contentW * 0.30;
           const brandW = contentW - weightW - (2 * s);
 
-          drawTextFit(data.brand.toUpperCase(), contentX, startY, brandW, row1H, 'bold', 20 * s, 'sans-serif', fg, 'left', 'top');
-          drawTextFit(data.weight, contentX + brandW + (2 * s), startY, weightW, row1H, 'normal', 16 * s, 'sans-serif', fg, 'right', 'top');
+          drawTextFit(brand, contentX, startY, brandW, row1H, 'bold', 20 * s, 'sans-serif', fg, 'left', 'top');
+          drawTextFit(weight, contentX + brandW + (2 * s), startY, weightW, row1H, 'normal', 16 * s, 'sans-serif', fg, 'right', 'top');
 
           // Row 2: Material Badge
           const badgeY = startY + row1H + (2 * s);
@@ -324,7 +336,7 @@ const LabelCanvas: React.FC<LabelCanvasProps> = ({
           ctx.roundRect(contentX, badgeY, contentW, badgeH, 3 * s);
           ctx.fill();
 
-          drawTextFit(data.material, contentX + (2 * s), badgeY, contentW - (4 * s), badgeH, '900', 45 * s, 'sans-serif', badgeFg, 'center', 'middle');
+          drawTextFit(material, contentX + (2 * s), badgeY, contentW - (4 * s), badgeH, '900', 45 * s, 'sans-serif', badgeFg, 'center', 'middle');
 
           // Row 3: Color (Left) - Stats (Right)
           const row3Y = badgeY + badgeH + (3 * s);
@@ -335,7 +347,7 @@ const LabelCanvas: React.FC<LabelCanvasProps> = ({
           const colorW = contentW - statsW - (2 * s);
 
           // Color
-          drawTextFit(data.colorName, contentX, row3Y, colorW, row3H, 'normal', 16 * s, 'sans-serif', fg, 'left', 'middle');
+          drawTextFit(colorName, contentX, row3Y, colorW, row3H, 'normal', 16 * s, 'sans-serif', fg, 'left', 'middle');
 
           // Stats Icons & Text
           const statsX = contentX + colorW + (2 * s);
@@ -346,12 +358,12 @@ const LabelCanvas: React.FC<LabelCanvasProps> = ({
 
           // Nozzle
           drawIcon('nozzle', statsX, row3Y + (row3H - iconS) / 2, iconS, fg);
-          drawTextFit(`${data.minTemp}-${data.maxTemp}`, statsX + iconS + (1 * s), row3Y, nozzleW - iconS - (1 * s), row3H, 'bold', 16 * s, 'monospace', fg, 'left', 'middle');
+          drawTextFit(`${minTemp}-${maxTemp}`, statsX + iconS + (1 * s), row3Y, nozzleW - iconS - (1 * s), row3H, 'bold', 16 * s, 'monospace', fg, 'left', 'middle');
 
           // Bed
           const bedX = statsX + nozzleW;
           drawIcon('bed', bedX, row3Y + (row3H - iconS) / 2, iconS, fg);
-          drawTextFit(`${data.bedTempMin}-${data.bedTempMax}`, bedX + iconS + (1 * s), row3Y, bedW - iconS - (1 * s), row3H, 'bold', 16 * s, 'monospace', fg, 'left', 'middle');
+          drawTextFit(`${bedTempMin}-${bedTempMax}`, bedX + iconS + (1 * s), row3Y, bedW - iconS - (1 * s), row3H, 'bold', 16 * s, 'monospace', fg, 'left', 'middle');
           return;
         }
 
@@ -405,7 +417,7 @@ const LabelCanvas: React.FC<LabelCanvasProps> = ({
         ctx.fill();
 
         // Premium brand indicator
-        const premium = isPremiumBrand(data.brand);
+        const premium = isPremiumBrand(brand);
         if (premium && !settings.invert) {
           // Gold accent for premium brands
           const premiumGradient = ctx.createLinearGradient(startX, startY, startX, startY + brandH);
@@ -422,7 +434,7 @@ const LabelCanvas: React.FC<LabelCanvasProps> = ({
         }
 
         const brandTextX = premium ? startX + (20 * s) : startX + (12 * s);
-        drawTextFit(data.brand.toUpperCase(), brandTextX, startY, contentW - (brandTextX - startX) - (12 * s), brandH, 'bold', 28 * s, 'sans-serif', fg, 'left', 'middle');
+        drawTextFit(brand, brandTextX, startY, contentW - (brandTextX - startX) - (12 * s), brandH, 'bold', 28 * s, 'sans-serif', fg, 'left', 'middle');
 
         // Weight badge - top right (OR DATE if enabled)
         const weightBadgeW = 80 * s;
@@ -440,14 +452,14 @@ const LabelCanvas: React.FC<LabelCanvasProps> = ({
            // SHOW WEIGHT
            const wIconS = brandH * 0.5;
            drawIcon('weight', startX + contentW - weightBadgeW + (8 * s), startY + (brandH - wIconS) / 2, wIconS, fg);
-           drawTextFit(data.weight, startX + contentW - weightBadgeW + wIconS + (12 * s), startY, weightBadgeW - wIconS - (20 * s), brandH, 'bold', 22 * s, 'sans-serif', fg, 'right', 'middle');
+           drawTextFit(weight, startX + contentW - weightBadgeW + wIconS + (12 * s), startY, weightBadgeW - wIconS - (20 * s), brandH, 'bold', 22 * s, 'sans-serif', fg, 'right', 'middle');
         }
 
         // MATERIAL - Large and prominent with specialty icon
         const matY = startY + brandH + (15 * s);
         const matH = safeHeight * 0.42;
-        const materialIcon = getMaterialIcon(data.material);
-        const materialText = materialIcon ? `${materialIcon} ${data.material.toUpperCase()}` : data.material.toUpperCase();
+        const materialIcon = getMaterialIcon(material);
+        const materialText = materialIcon ? `${materialIcon} ${material}` : material;
         drawTextFit(materialText, startX + (5 * s), matY, contentW - (10 * s), matH, '900', 120 * s, 'sans-serif', fg, 'left', 'middle');
 
         // Hygroscopy warning badge if needed
@@ -467,7 +479,7 @@ const LabelCanvas: React.FC<LabelCanvasProps> = ({
         const colorH = safeHeight * 0.16;
         const paletteSize = colorH * 0.7;
         drawIcon('palette', startX + (8 * s), colorY + (colorH - paletteSize) / 2, paletteSize, fg);
-        drawTextFit(data.colorName, startX + paletteSize + (18 * s), colorY, contentW - paletteSize - (25 * s), colorH, 'bold', 38 * s, 'sans-serif', fg, 'left', 'middle');
+        drawTextFit(colorName, startX + paletteSize + (18 * s), colorY, contentW - paletteSize - (25 * s), colorH, 'bold', 38 * s, 'sans-serif', fg, 'left', 'middle');
 
         // Temperature bars at bottom with modern design
         const tempY = colorY + colorH + (10 * s);
@@ -482,7 +494,7 @@ const LabelCanvas: React.FC<LabelCanvasProps> = ({
 
         const nozzleIconSize = tempBarH * 0.65;
         drawIcon('nozzle', startX + (10 * s), tempY + (tempBarH - nozzleIconSize) / 2, nozzleIconSize, fg);
-        drawTextFit(`${data.minTemp}°–${data.maxTemp}°C`, startX + nozzleIconSize + (20 * s), tempY, contentW - nozzleIconSize - (30 * s), tempBarH, 'bold', 32 * s, 'monospace', fg, 'left', 'middle');
+        drawTextFit(`${minTemp}°–${maxTemp}°C`, startX + nozzleIconSize + (20 * s), tempY, contentW - nozzleIconSize - (30 * s), tempBarH, 'bold', 32 * s, 'monospace', fg, 'left', 'middle');
 
         // Bed temp bar
         const bedY = tempY + tempBarH + (6 * s);
@@ -493,7 +505,7 @@ const LabelCanvas: React.FC<LabelCanvasProps> = ({
 
         const bedIconSize = tempBarH * 0.65;
         drawIcon('bed', startX + (10 * s), bedY + (tempBarH - bedIconSize) / 2, bedIconSize, fg);
-        drawTextFit(`${data.bedTempMin}°–${data.bedTempMax}°C`, startX + bedIconSize + (20 * s), bedY, contentW - bedIconSize - (30 * s), tempBarH, 'bold', 32 * s, 'monospace', fg, 'left', 'middle');
+        drawTextFit(`${bedTempMin}°–${bedTempMax}°C`, startX + bedIconSize + (20 * s), bedY, contentW - bedIconSize - (30 * s), tempBarH, 'bold', 32 * s, 'monospace', fg, 'left', 'middle');
       };
 
       const renderTechnical = () => {
@@ -510,9 +522,9 @@ const LabelCanvas: React.FC<LabelCanvasProps> = ({
           drawLine(startX + col1W, startY, startX + col1W, startY + safeHeight, 1);
           drawLine(startX + col1W + col2W, startY, startX + col1W + col2W, startY + safeHeight, 1);
 
-          drawTextFit(data.brand.substring(0, 4).toUpperCase(), startX, startY, col1W, safeHeight, 'bold', 18 * s, 'monospace', fg, 'center', 'middle');
-          drawTextFit(data.material, startX + col1W, startY, col2W, safeHeight, 'bold', 20 * s, 'monospace', fg, 'center', 'middle');
-          drawTextFit(`${data.minTemp}-${data.maxTemp}`, startX + col1W + col2W, startY, col3W, safeHeight, 'normal', 16 * s, 'monospace', fg, 'center', 'middle');
+          drawTextFit(brand.substring(0, 4), startX, startY, col1W, safeHeight, 'bold', 18 * s, 'monospace', fg, 'center', 'middle');
+          drawTextFit(material, startX + col1W, startY, col2W, safeHeight, 'bold', 20 * s, 'monospace', fg, 'center', 'middle');
+          drawTextFit(`${minTemp}-${maxTemp}`, startX + col1W + col2W, startY, col3W, safeHeight, 'normal', 16 * s, 'monospace', fg, 'center', 'middle');
           return;
         }
 
@@ -529,16 +541,16 @@ const LabelCanvas: React.FC<LabelCanvasProps> = ({
           drawLine(startX + col1W, startY, startX + col1W, startY + safeHeight, 1);
           drawLine(startX + col1W + col2W, startY, startX + col1W + col2W, startY + safeHeight, 1);
 
-          drawTextFit(data.brand.substring(0, 8).toUpperCase(), startX + 2, startY, col1W - 4, safeHeight, 'bold', 18 * s, 'monospace', fg, 'center', 'middle');
+          drawTextFit(brand.substring(0, 8), startX + 2, startY, col1W - 4, safeHeight, 'bold', 18 * s, 'monospace', fg, 'center', 'middle');
 
           const splitH = safeHeight / 2;
-          drawTextFit(data.material, startX + col1W + 2, startY, col2W - 4, splitH, 'bold', 20 * s, 'monospace', fg, 'center', 'middle');
+          drawTextFit(material, startX + col1W + 2, startY, col2W - 4, splitH, 'bold', 20 * s, 'monospace', fg, 'center', 'middle');
           drawLine(startX + col1W, startY + splitH, startX + col1W + col2W, startY + splitH, 1);
-          drawTextFit(data.colorName.substring(0, 10).toUpperCase(), startX + col1W + 2, startY + splitH, col2W - 4, safeHeight - splitH, 'normal', 14 * s, 'monospace', fg, 'center', 'middle');
+          drawTextFit(colorName.substring(0, 10).toUpperCase(), startX + col1W + 2, startY + splitH, col2W - 4, safeHeight - splitH, 'normal', 14 * s, 'monospace', fg, 'center', 'middle');
 
-          drawTextFit(`N:${data.minTemp}-${data.maxTemp}`, startX + col1W + col2W + 2, startY, col3W - 4, splitH, 'bold', 16 * s, 'monospace', fg, 'center', 'middle');
+          drawTextFit(`N:${minTemp}-${maxTemp}`, startX + col1W + col2W + 2, startY, col3W - 4, splitH, 'bold', 16 * s, 'monospace', fg, 'center', 'middle');
           drawLine(startX + col1W + col2W, startY + splitH, startX + safeWidth, startY + splitH, 1);
-          drawTextFit(`B:${data.bedTempMin}-${data.bedTempMax}`, startX + col1W + col2W + 2, startY + splitH, col3W - 4, safeHeight - splitH, 'bold', 16 * s, 'monospace', fg, 'center', 'middle');
+          drawTextFit(`B:${bedTempMin}-${bedTempMax}`, startX + col1W + col2W + 2, startY + splitH, col3W - 4, safeHeight - splitH, 'bold', 16 * s, 'monospace', fg, 'center', 'middle');
           return;
         }
 
@@ -552,8 +564,8 @@ const LabelCanvas: React.FC<LabelCanvasProps> = ({
         const splitX = safeWidth * 0.40;
         drawLine(startX + splitX, startY, startX + splitX, startY + headerH, 2);
 
-        drawTextFit(data.brand.toUpperCase(), startX + (8 * s), startY, splitX - (16 * s), headerH, 'bold', 40 * s, 'monospace', fg, 'left', 'middle');
-        drawTextFit(data.material, startX + splitX + (10 * s), startY, safeWidth - splitX - (20 * s), headerH, '900', 60 * s, 'monospace', fg, 'right', 'middle');
+        drawTextFit(brand, startX + (8 * s), startY, splitX - (16 * s), headerH, 'bold', 40 * s, 'monospace', fg, 'left', 'middle');
+        drawTextFit(material, startX + splitX + (10 * s), startY, safeWidth - splitX - (20 * s), headerH, '900', 60 * s, 'monospace', fg, 'right', 'middle');
 
         // Main Content Grid
         let curY = startY + headerH;
@@ -573,24 +585,24 @@ const LabelCanvas: React.FC<LabelCanvasProps> = ({
         // Row 1: Color
         drawLine(startX, curY + rowH, startX + contentW, curY + rowH, 1);
         drawIcon('palette', startX + (8 * s), curY + (rowH * 0.2), rowH * 0.6, fg);
-        drawTextFit(data.colorName, startX + (40 * s), curY, contentW - (50 * s), rowH, 'bold', 30 * s, 'monospace');
+        drawTextFit(colorName, startX + (40 * s), curY, contentW - (50 * s), rowH, 'bold', 30 * s, 'monospace');
         curY += rowH;
 
         // Row 2: Nozzle Temp
         drawLine(startX, curY + rowH, startX + contentW, curY + rowH, 1);
         drawIcon('nozzle', startX + (8 * s), curY + (rowH * 0.2), rowH * 0.6, fg);
-        drawTextFit(`NOZZLE: ${data.minTemp} - ${data.maxTemp}°C`, startX + (40 * s), curY, contentW - (50 * s), rowH, 'bold', 28 * s, 'monospace');
+        drawTextFit(`NOZZLE: ${minTemp} - ${maxTemp}°C`, startX + (40 * s), curY, contentW - (50 * s), rowH, 'bold', 28 * s, 'monospace');
         curY += rowH;
 
         // Row 3: Bed Temp
         drawLine(startX, curY + rowH, startX + contentW, curY + rowH, 1);
         drawIcon('bed', startX + (8 * s), curY + (rowH * 0.2), rowH * 0.6, fg);
-        drawTextFit(`BED:    ${data.bedTempMin} - ${data.bedTempMax}°C`, startX + (40 * s), curY, contentW - (50 * s), rowH, 'bold', 28 * s, 'monospace');
+        drawTextFit(`BED:    ${bedTempMin} - ${bedTempMax}°C`, startX + (40 * s), curY, contentW - (50 * s), rowH, 'bold', 28 * s, 'monospace');
         curY += rowH;
 
         // Row 4: Weight & Hygroscopy
         drawIcon('weight', startX + (8 * s), curY + (rowH * 0.2), rowH * 0.6, fg);
-        drawTextFit(data.weight, startX + (40 * s), curY, (contentW / 2) - (50 * s), rowH, 'bold', 30 * s, 'monospace');
+        drawTextFit(weight, startX + (40 * s), curY, (contentW / 2) - (50 * s), rowH, 'bold', 30 * s, 'monospace');
 
         if (data.hygroscopy === 'high' || data.hygroscopy === 'medium') {
           const warnX = startX + (contentW / 2);
@@ -617,8 +629,8 @@ const LabelCanvas: React.FC<LabelCanvasProps> = ({
         ctx.fillStyle = settings.invert ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)';
         ctx.fillRect(startX, startY, safeWidth, headerH);
 
-        drawTextFit(data.material, startX + (5 * s), startY, safeWidth * 0.6, headerH, '900', 60 * s, 'sans-serif', fg, 'left', 'middle');
-        drawTextFit(data.brand, startX + (safeWidth * 0.6), startY, safeWidth * 0.4 - (5 * s), headerH, 'normal', 30 * s, 'sans-serif', fg, 'right', 'middle');
+        drawTextFit(material, startX + (5 * s), startY, safeWidth * 0.6, headerH, '900', 60 * s, 'sans-serif', fg, 'left', 'middle');
+        drawTextFit(brand, startX + (safeWidth * 0.6), startY, safeWidth * 0.4 - (5 * s), headerH, 'normal', 30 * s, 'sans-serif', fg, 'right', 'middle');
 
         // Warning Banner if Hygroscopic
         let curY = startY + headerH + (5 * s);
@@ -661,7 +673,7 @@ const LabelCanvas: React.FC<LabelCanvasProps> = ({
         // Bottom info
         const footerH = safeHeight - (curY - startY);
         if (footerH > 20 * s) {
-          drawTextFit(`${data.colorName} • ${data.weight}`, startX, curY, safeWidth, footerH, 'normal', 20 * s, 'monospace', fg, 'center', 'bottom');
+          drawTextFit(`${colorName} • ${weight}`, startX, curY, safeWidth, footerH, 'normal', 20 * s, 'monospace', fg, 'center', 'bottom');
         }
       };
 
@@ -671,9 +683,9 @@ const LabelCanvas: React.FC<LabelCanvasProps> = ({
           const brandW = safeWidth * 0.3;
           ctx.fillStyle = fg;
           ctx.fillRect(startX, startY, brandW, safeHeight);
-          drawTextFit(data.brand.substring(0, 4).toUpperCase(), startX, startY, brandW, safeHeight, '900', 18 * s, 'sans-serif', bg, 'center', 'middle');
+          drawTextFit(brand.substring(0, 4), startX, startY, brandW, safeHeight, '900', 18 * s, 'sans-serif', bg, 'center', 'middle');
 
-          drawTextFit(data.material.toUpperCase(), startX + brandW + (4 * s), startY, safeWidth - brandW - (4 * s), safeHeight, '900', 35 * s, 'sans-serif', fg, 'center', 'middle');
+          drawTextFit(material, startX + brandW + (4 * s), startY, safeWidth - brandW - (4 * s), safeHeight, '900', 35 * s, 'sans-serif', fg, 'center', 'middle');
           return;
         }
 
@@ -681,21 +693,21 @@ const LabelCanvas: React.FC<LabelCanvasProps> = ({
           const leftW = safeWidth * 0.30;
           ctx.fillStyle = fg;
           ctx.fillRect(startX, startY, leftW, safeHeight);
-          drawTextFit(data.brand.substring(0, 8).toUpperCase(), startX + 2, startY, leftW - 4, safeHeight, '900', 24 * s, 'sans-serif', bg, 'center', 'middle');
+          drawTextFit(brand.substring(0, 8), startX + 2, startY, leftW - 4, safeHeight, '900', 24 * s, 'sans-serif', bg, 'center', 'middle');
 
           const rightX = startX + leftW + (4 * s);
           const rightW = safeWidth - leftW - (4 * s);
 
           const matH = safeHeight * 0.55;
-          drawTextFit(data.material.toUpperCase(), rightX, startY, rightW, matH, '900', 50 * s, 'sans-serif', fg, 'left', 'middle');
+          drawTextFit(material, rightX, startY, rightW, matH, '900', 50 * s, 'sans-serif', fg, 'left', 'middle');
 
           const footerH = safeHeight - matH;
           const colorW = rightW * 0.4;
           const tempsW = rightW - colorW;
 
-          drawTextFit(data.colorName, rightX, startY + matH, colorW, footerH, 'normal', 16 * s, 'sans-serif', fg, 'left', 'middle');
+          drawTextFit(colorName, rightX, startY + matH, colorW, footerH, 'normal', 16 * s, 'sans-serif', fg, 'left', 'middle');
 
-          const tempStr = `${data.minTemp}-${data.maxTemp}° / ${data.bedTempMin}-${data.bedTempMax}°`;
+          const tempStr = `${minTemp}-${maxTemp}° / ${bedTempMin}-${bedTempMax}°`;
           drawTextFit(tempStr, rightX + colorW, startY + matH, tempsW, footerH, 'bold', 16 * s, 'sans-serif', fg, 'right', 'middle');
           return;
         }
@@ -704,11 +716,11 @@ const LabelCanvas: React.FC<LabelCanvasProps> = ({
         const headerH = safeHeight * 0.22;
         ctx.fillStyle = fg;
         ctx.fillRect(startX, startY, safeWidth, headerH);
-        drawTextFit(data.brand.toUpperCase(), startX, startY, safeWidth, headerH, '900', 45 * s, 'sans-serif', bg, 'center', 'middle');
+        drawTextFit(brand, startX, startY, safeWidth, headerH, '900', 45 * s, 'sans-serif', bg, 'center', 'middle');
 
         let curY = startY + headerH + (10 * s);
         const matH = safeHeight * 0.45;
-        drawTextFit(data.material, startX, curY, safeWidth, matH, '900', 140 * s, 'sans-serif', fg, 'center', 'middle');
+        drawTextFit(material, startX, curY, safeWidth, matH, '900', 140 * s, 'sans-serif', fg, 'center', 'middle');
 
         curY += matH;
         const footerH = safeHeight - (curY - startY);
@@ -717,11 +729,11 @@ const LabelCanvas: React.FC<LabelCanvasProps> = ({
           const qrSize = footerH;
           ctx.drawImage(qrImg, startX + safeWidth - qrSize, curY, qrSize, qrSize);
           const infoW = safeWidth - qrSize - (10 * s);
-          drawTextFit(data.colorName, startX, curY, infoW, footerH * 0.5, 'bold', 40 * s, 'sans-serif', fg, 'left', 'top');
-          drawTextFit(`${data.minTemp}-${data.maxTemp}°C B:${data.bedTempMin}-${data.bedTempMax}`, startX, curY + (footerH * 0.6), infoW, footerH * 0.4, 'normal', 25 * s, 'sans-serif', fg, 'left', 'top');
+          drawTextFit(colorName, startX, curY, infoW, footerH * 0.5, 'bold', 40 * s, 'sans-serif', fg, 'left', 'top');
+          drawTextFit(`${minTemp}-${maxTemp}°C B:${bedTempMin}-${bedTempMax}`, startX, curY + (footerH * 0.6), infoW, footerH * 0.4, 'normal', 25 * s, 'sans-serif', fg, 'left', 'top');
         } else {
-          drawTextFit(data.colorName, startX, curY, safeWidth, footerH * 0.5, 'bold', 40 * s, 'sans-serif', fg, 'center', 'top');
-          drawTextFit(`${data.minTemp}-${data.maxTemp}°C B:${data.bedTempMin}-${data.bedTempMax}`, startX, curY + (footerH * 0.6), safeWidth, footerH * 0.4, 'normal', 25 * s, 'sans-serif', fg, 'center', 'top');
+          drawTextFit(colorName, startX, curY, safeWidth, footerH * 0.5, 'bold', 40 * s, 'sans-serif', fg, 'center', 'top');
+          drawTextFit(`${minTemp}-${maxTemp}°C B:${bedTempMin}-${bedTempMax}`, startX, curY + (footerH * 0.6), safeWidth, footerH * 0.4, 'normal', 25 * s, 'sans-serif', fg, 'center', 'top');
         }
       };
 
@@ -733,7 +745,7 @@ const LabelCanvas: React.FC<LabelCanvasProps> = ({
           if (settings.invert) ctx.fillStyle = 'white';
           ctx.fillRect(startX, startY, barW, safeHeight);
 
-          drawTextFit(data.material, startX + barW + (4 * s), startY, safeWidth - barW - (4 * s), safeHeight, '900', 32 * s, 'sans-serif', fg, 'left', 'middle');
+          drawTextFit(material, startX + barW + (4 * s), startY, safeWidth - barW - (4 * s), safeHeight, '900', 32 * s, 'sans-serif', fg, 'left', 'middle');
           return;
         }
 
@@ -747,9 +759,9 @@ const LabelCanvas: React.FC<LabelCanvasProps> = ({
           const contentW = safeWidth - barW - (6 * s);
 
           const rowH = safeHeight / 3;
-          drawTextFit(data.brand.toUpperCase(), contentX, startY, contentW, rowH, 'bold', 18 * s, 'sans-serif', fg, 'left', 'middle');
-          drawTextFit(data.material, contentX, startY + rowH, contentW, rowH * 1.1, '900', 28 * s, 'sans-serif', fg, 'left', 'middle');
-          drawTextFit(`${data.minTemp}-${data.maxTemp}°C / ${data.bedTempMin}-${data.bedTempMax}°C`, contentX, startY + (rowH * 2), contentW, rowH * 0.9, 'normal', 16 * s, 'sans-serif', fg, 'left', 'middle');
+          drawTextFit(brand, contentX, startY, contentW, rowH, 'bold', 18 * s, 'sans-serif', fg, 'left', 'middle');
+          drawTextFit(material, contentX, startY + rowH, contentW, rowH * 1.1, '900', 28 * s, 'sans-serif', fg, 'left', 'middle');
+          drawTextFit(`${minTemp}-${maxTemp}°C / ${bedTempMin}-${bedTempMax}°C`, contentX, startY + (rowH * 2), contentW, rowH * 0.9, 'normal', 16 * s, 'sans-serif', fg, 'left', 'middle');
           return;
         }
 
@@ -775,34 +787,34 @@ const LabelCanvas: React.FC<LabelCanvasProps> = ({
         const rowH = safeHeight / 4;
         let curY = startY;
 
-        drawTextFit(data.brand.toUpperCase(), contentX, curY, contentW, rowH, 'bold', 30 * s, 'sans-serif', fg, 'left', 'top');
+        drawTextFit(brand, contentX, curY, contentW, rowH, 'bold', 30 * s, 'sans-serif', fg, 'left', 'top');
         curY += rowH;
-        drawTextFit(data.material, contentX, curY, contentW, rowH * 1.6, 'normal', 85 * s, 'sans-serif', fg, 'left', 'top');
+        drawTextFit(material, contentX, curY, contentW, rowH * 1.6, 'normal', 85 * s, 'sans-serif', fg, 'left', 'top');
         curY += rowH * 1.6;
-        drawTextFit(data.colorName, contentX, curY, contentW, rowH * 0.7, 'normal', 35 * s, 'sans-serif', fg, 'left', 'top');
+        drawTextFit(colorName, contentX, curY, contentW, rowH * 0.7, 'normal', 35 * s, 'sans-serif', fg, 'left', 'top');
         curY += rowH * 0.8;
 
         const iconSize = rowH * 0.5;
         drawIcon('nozzle', contentX, curY, iconSize, fg);
-        drawTextFit(`${data.minTemp}-${data.maxTemp}`, contentX + iconSize + (4 * s), curY, contentW * 0.3, rowH * 0.6, 'bold', 25 * s, 'monospace', fg, 'left', 'top');
+        drawTextFit(`${minTemp}-${maxTemp}`, contentX + iconSize + (4 * s), curY, contentW * 0.3, rowH * 0.6, 'bold', 25 * s, 'monospace', fg, 'left', 'top');
 
         const bedX = contentX + (contentW * 0.4);
         drawIcon('bed', bedX, curY, iconSize, fg);
-        drawTextFit(`${data.bedTempMin}-${data.bedTempMax}`, bedX + iconSize + (4 * s), curY, contentW * 0.3, rowH * 0.6, 'bold', 25 * s, 'monospace', fg, 'left', 'top');
+        drawTextFit(`${bedTempMin}-${bedTempMax}`, bedX + iconSize + (4 * s), curY, contentW * 0.3, rowH * 0.6, 'bold', 25 * s, 'monospace', fg, 'left', 'top');
       };
 
       const renderMinimal = () => {
         // Ultra-clean minimal design - just the essentials
         if (isNano) {
-          drawTextFit(data.material, startX, startY, safeWidth, safeHeight, '900', 35 * s, 'sans-serif', fg, 'center', 'middle');
+          drawTextFit(material, startX, startY, safeWidth, safeHeight, '900', 35 * s, 'sans-serif', fg, 'center', 'middle');
           return;
         }
 
         if (isMicro) {
           // For micro labels: Material | Temps
           const col1W = safeWidth * 0.55;
-          drawTextFit(data.material, startX, startY, col1W, safeHeight, '900', 32 * s, 'sans-serif', fg, 'left', 'middle');
-          drawTextFit(`${data.minTemp}-${data.maxTemp}°`, startX + col1W, startY, safeWidth - col1W, safeHeight, 'bold', 18 * s, 'monospace', fg, 'right', 'middle');
+          drawTextFit(material, startX, startY, col1W, safeHeight, '900', 32 * s, 'sans-serif', fg, 'left', 'middle');
+          drawTextFit(`${minTemp}-${maxTemp}°`, startX + col1W, startY, safeWidth - col1W, safeHeight, 'bold', 18 * s, 'monospace', fg, 'right', 'middle');
           return;
         }
 
@@ -820,10 +832,10 @@ const LabelCanvas: React.FC<LabelCanvasProps> = ({
         ctx.stroke();
 
         // Brand - small at top
-        drawTextFit(data.brand.toUpperCase(), startX, startY, safeWidth, headerH, 'normal', 22 * s, 'sans-serif', fg, 'left', 'middle');
+        drawTextFit(brand, startX, startY, safeWidth, headerH, 'normal', 22 * s, 'sans-serif', fg, 'left', 'middle');
 
         // Material - Large and centered
-        drawTextFit(data.material, startX, startY + headerH, safeWidth, mainH, '900', 100 * s, 'sans-serif', fg, 'center', 'middle');
+        drawTextFit(material, startX, startY + headerH, safeWidth, mainH, '900', 100 * s, 'sans-serif', fg, 'center', 'middle');
 
         // Footer info
         const footerY = startY + headerH + mainH;
@@ -836,8 +848,8 @@ const LabelCanvas: React.FC<LabelCanvasProps> = ({
 
         // Color | Temps side by side
         const halfW = safeWidth / 2;
-        drawTextFit(data.colorName, startX, footerY, halfW - (10 * s), footerH, 'normal', 28 * s, 'sans-serif', fg, 'left', 'middle');
-        drawTextFit(`${data.minTemp}–${data.maxTemp}°C`, startX + halfW, footerY, halfW, footerH, 'bold', 28 * s, 'monospace', fg, 'right', 'middle');
+        drawTextFit(colorName, startX, footerY, halfW - (10 * s), footerH, 'normal', 28 * s, 'sans-serif', fg, 'left', 'middle');
+        drawTextFit(`${minTemp}–${maxTemp}°C`, startX + halfW, footerY, halfW, footerH, 'bold', 28 * s, 'monospace', fg, 'right', 'middle');
       };
 
       switch (settings.theme) {

@@ -71,6 +71,68 @@ const WRITE_CHARACTERISTICS = {
     NORDIC_TX: '6e400002-b5a3-f393-e0a9-e50e24dcca9e'
 };
 
+const ALL_FILTERS = [
+    { namePrefix: 'M' }, // M110, M02
+    { namePrefix: 'D' }, // D30
+    { namePrefix: 'Q' }, // Q30
+    { namePrefix: 'P' }, // Phomemo
+    { namePrefix: 'S' }, // S1 / Generic S-series
+    { namePrefix: 'iD' }, // iDPRT
+    { services: [PRINTER_SERVICES.HM10_UART] } // Catch HM-10 based devices
+];
+
+const ALL_OPTIONAL_SERVICES = [
+    PRINTER_SERVICES.PHOMEMO,
+    PRINTER_SERVICES.ALT_SERVICE,
+    PRINTER_SERVICES.PROPRIETARY,
+    PRINTER_SERVICES.HM10_UART,
+    PRINTER_SERVICES.NORDIC_UART,
+    PRINTER_SERVICES.BATTERY,
+    PRINTER_SERVICES.DEVICE_INFO
+];
+
+/**
+ * Attempt to reconnect to a previously authorized device without user interaction
+ */
+export const tryReconnect = async (): Promise<boolean> => {
+    if (!navigator.bluetooth || !navigator.bluetooth.getDevices) {
+        return false;
+    }
+
+    try {
+        const devices = await navigator.bluetooth.getDevices();
+        if (devices.length > 0) {
+            console.log("Found authorized devices:", devices.map(d => d.name));
+            // Try to connect to the first available one that looks like a printer
+            for (const device of devices) {
+                // If we have a cached device, use that ID preference?
+                // Just try to connect to the first one.
+                try {
+                    device.addEventListener('gattserverdisconnected', () => {
+                        console.log("Printer disconnected");
+                        cachedDevice = null;
+                        notifyListeners(false);
+                    });
+
+                    if (device.gatt) {
+                         const server = await device.gatt.connect();
+                         if (server && server.connected) {
+                             cachedDevice = device;
+                             notifyListeners(true);
+                             return true;
+                         }
+                    }
+                } catch (e) {
+                    console.warn(`Failed to silent reconnect to ${device.name}`, e);
+                }
+            }
+        }
+    } catch (e) {
+        console.warn("Silent reconnect failed", e);
+    }
+    return false;
+};
+
 export const connectPrinter = async (): Promise<BluetoothDevice> => {
     if (!navigator.bluetooth) {
         throw new Error("Web Bluetooth is not supported in this browser.");
@@ -86,24 +148,8 @@ export const connectPrinter = async (): Promise<BluetoothDevice> => {
 
     try {
         const device = await navigator.bluetooth.requestDevice({
-            filters: [
-                { namePrefix: 'M' }, // M110, M02
-                { namePrefix: 'D' }, // D30
-                { namePrefix: 'Q' }, // Q30
-                { namePrefix: 'P' }, // Phomemo
-                { namePrefix: 'S' }, // S1 / Generic S-series
-                { namePrefix: 'iD' }, // iDPRT
-                { services: [PRINTER_SERVICES.HM10_UART] } // Catch HM-10 based devices
-            ],
-            optionalServices: [
-                PRINTER_SERVICES.PHOMEMO,
-                PRINTER_SERVICES.ALT_SERVICE,
-                PRINTER_SERVICES.PROPRIETARY,
-                PRINTER_SERVICES.HM10_UART,
-                PRINTER_SERVICES.NORDIC_UART,
-                PRINTER_SERVICES.BATTERY,
-                PRINTER_SERVICES.DEVICE_INFO
-            ]
+            filters: ALL_FILTERS,
+            optionalServices: ALL_OPTIONAL_SERVICES
         });
 
         // Add disconnect listener
@@ -277,14 +323,13 @@ export const printLabel = async (device: BluetoothDevice, canvas: HTMLCanvasElem
             // 50 is neutral. 0 is lightest, 100 is darkest.
             if (settings.density !== 50) {
                  // Convert 0-100 to a contrast factor
-                 // 50 -> 1.0 (no change)
-                 // 100 -> 2.0 (high contrast/darker)
-                 // 0 -> 0.5 (low contrast/lighter)
+                 // 50 -> 0 change
+                 // 100 -> reduce brightness by significant amount to darken
 
-                 // Simpler approach: Gamma correction or just brightness shift?
-                 // Let's stick to brightness shift but amplify it.
-                 // range: -128 to +128 shift
-                 const shift = (settings.density - 50) * 2.5;
+                 // Shift brightness.
+                 // If density is 100, we want darker, so SUBTRACT from gray value.
+                 // Factor 4.0 is aggressive. (50 * 4 = 200 shift possible)
+                 const shift = (settings.density - 50) * 4.0;
                  gray = gray - shift;
 
                  if (gray < 0) gray = 0;

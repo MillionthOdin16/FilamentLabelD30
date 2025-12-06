@@ -51,10 +51,10 @@ const MAX_RETRIES = 2;
 
 export const analyzeFilamentImage = async (
     base64Image: string,
-    onLog?: (log: {text: string, color: string}) => void,
+    onLog?: (log: {text: string, icon?: any, color?: string}) => void,
     onBox?: (box: {label: string, rect: number[]}) => void
 ): Promise<FilamentData> => {
-  const apiKey = process.env.API_KEY;
+  const apiKey = process.env.API_KEY || (window as any).GEMINI_API_KEY; // Support both env and injected global
   if (!apiKey) {
     throw new Error("API Key not found");
   }
@@ -80,33 +80,44 @@ export const analyzeFilamentImage = async (
             }
         });
 
+        // Use the result directly as the iterator if stream property is missing
+        // This handles both @google/genai v0.x and newer
+        const streamIterator = (result as any).stream || result;
+
         let fullText = '';
+        let textBuffer = '';
 
-        for await (const chunk of result.stream) {
-            const chunkText = chunk.text();
-            fullText += chunkText;
-
-            // Process Logs
-            const logMatches = chunkText.match(/LOG: (.*)/g);
-            if (logMatches && onLog) {
-                logMatches.forEach(match => {
-                    const msg = match.replace('LOG: ', '').trim();
-                    onLog({ text: msg, color: 'text-cyan-400' });
-                });
+        for await (const chunk of streamIterator) {
+            let chunkText = '';
+             // Safely extract text
+            if (typeof chunk.text === 'function') {
+                chunkText = chunk.text();
+            } else if (typeof (chunk as any).text === 'string') {
+                chunkText = (chunk as any).text;
+            } else if (chunk.candidates?.[0]?.content?.parts) {
+                chunkText = chunk.candidates[0].content.parts.map((p: any) => p.text).join('');
             }
 
-            // Process Boxes
-            const boxMatches = chunkText.match(/BOX: (.*?) \[([\d,\s]+)\]/g);
-            if (boxMatches && onBox) {
-                boxMatches.forEach(match => {
-                    // Re-parse the specific line to be safe
-                    const parts = match.match(/BOX: (.*?) \[([\d,\s]+)\]/);
+            fullText += chunkText;
+            textBuffer += chunkText;
+
+            // Process Logs from Buffer
+            let newlineIndex;
+            while ((newlineIndex = textBuffer.indexOf('\n')) !== -1) {
+                const line = textBuffer.slice(0, newlineIndex).trim();
+                textBuffer = textBuffer.slice(newlineIndex + 1);
+
+                if (line.startsWith('LOG: ') && onLog) {
+                    const msg = line.replace('LOG: ', '').trim();
+                    onLog({ text: msg, color: 'text-cyan-400' });
+                } else if (line.startsWith('BOX: ') && onBox) {
+                     const parts = line.match(/BOX: (.*?) \[([\d,\s]+)\]/);
                     if (parts) {
                         const label = parts[1];
                         const coords = parts[2].split(',').map(n => parseInt(n.trim()));
                         if (coords.length === 4) onBox({ label, rect: coords });
                     }
-                });
+                }
             }
         }
 

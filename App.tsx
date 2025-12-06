@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Camera, Printer, RotateCcw, PenTool, Loader2, Info, Bluetooth, Ruler, History, ArrowRight, Battery, BatteryFull, BatteryLow, BatteryMedium, ExternalLink, AlertTriangle, Eye, X, Download, Upload, Image as ImageIcon, Edit3, CheckCircle2, Sparkles, Package, Layout, BarChart3, Layers, PlusCircle, Scan } from 'lucide-react';
 import { AppState, FilamentData, LABEL_PRESETS, LabelPreset, PrintSettings, HistoryEntry, LabelTheme, PrinterInfo, PrintJob, LabelTemplate } from './types';
 import { analyzeFilamentImage } from './services/geminiService';
-import { connectPrinter, printLabel, getBatteryLevel, getDeviceDetails, checkPrinterStatus, addConnectionListener, removeConnectionListener, getConnectedDevice, addStatusListener, removeStatusListener } from './services/printerService';
+import { connectPrinter, printLabel, getBatteryLevel, getDeviceDetails, checkPrinterStatus, addConnectionListener, removeConnectionListener, getConnectedDevice, addStatusListener, removeStatusListener, tryReconnect } from './services/printerService';
 import CameraCapture from './components/CameraCapture';
 import LabelEditor from './components/LabelEditor';
 import LabelCanvas from './components/LabelCanvas';
@@ -119,7 +119,6 @@ const App: React.FC = () => {
     const listener = (connected: boolean) => {
       setIsConnected(connected);
       if (connected) {
-        toast.success("Printer Connected", "Ready to print labels");
         // Auto-fetch details if reconnected
         const device = getConnectedDevice();
         if (device) {
@@ -127,8 +126,6 @@ const App: React.FC = () => {
            getDeviceDetails(device).then(setPrinterInfo);
         }
       } else {
-        // Only show disconnect warning if we were previously connected (avoid noise on load)
-        // We can't easily check previous state here without ref, but it's fine.
         setBatteryLevel(null);
       }
     };
@@ -139,6 +136,9 @@ const App: React.FC = () => {
        setStatusMsg(status);
     };
     addStatusListener(statusListener);
+
+    // Attempt Auto-Reconnect
+    tryReconnect().catch(e => console.debug("Auto-connect failed", e));
 
     return () => {
       removeConnectionListener(listener);
@@ -378,7 +378,11 @@ const App: React.FC = () => {
 
       const job = batchQueue[currentBatchIndex];
       // Safety check: if job is undefined (shouldn't happen with bounds check above)
-      if (!job) return;
+      if (!job) {
+         // Skip corrupt item
+         setCurrentBatchIndex(prev => prev + 1);
+         return;
+      }
 
       // Wait for canvas to be populated?
       // The canvas is rendered conditionally: batchQueue[currentBatchIndex] && ...
@@ -989,8 +993,8 @@ const App: React.FC = () => {
 
             <div className="bg-gray-800/50 p-4 rounded-lg text-left">
               <p className="text-xs text-gray-500 uppercase font-bold mb-1">Current Label</p>
-              <p className="text-white font-bold">{batchQueue[currentBatchIndex]?.label.brand}</p>
-              <p className="text-cyan-400 text-sm">{batchQueue[currentBatchIndex]?.label.material}</p>
+              <p className="text-white font-bold">{batchQueue[currentBatchIndex]?.label?.brand || 'Unknown'}</p>
+              <p className="text-cyan-400 text-sm">{batchQueue[currentBatchIndex]?.label?.material || 'Filament'}</p>
             </div>
 
             <button

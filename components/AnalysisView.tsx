@@ -1,6 +1,7 @@
 
-import React from 'react';
-import { Scan, Cpu, Database, Search, CheckCircle2, Wifi, Zap, Terminal } from 'lucide-react';
+import React, { useRef, useEffect } from 'react';
+import { Scan, Cpu, Database, Search, CheckCircle2, Wifi, Zap, Terminal, Copy } from 'lucide-react';
+import { useToast } from './ToastProvider';
 
 interface AnalysisViewProps {
   imageSrc: string;
@@ -9,7 +10,20 @@ interface AnalysisViewProps {
 }
 
 const AnalysisView: React.FC<AnalysisViewProps> = ({ imageSrc, logs, boxes }) => {
-  // Auto-scroll logic could be added here if needed, but flex-col-reverse handles it.
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const { success } = useToast();
+
+  useEffect(() => {
+      if (scrollRef.current) {
+          scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+      }
+  }, [logs]);
+
+  const handleCopy = () => {
+      const text = logs.map(l => l.text).join('\n');
+      navigator.clipboard.writeText(text);
+      success("Logs Copied", "Debug data copied to clipboard");
+  };
 
   return (
     <div className="fixed inset-0 z-50 bg-gray-950 flex flex-col overflow-hidden">
@@ -76,17 +90,24 @@ const AnalysisView: React.FC<AnalysisViewProps> = ({ imageSrc, logs, boxes }) =>
 
         {/* Terminal Output */}
         <div className="bg-black/90 border border-gray-800 rounded-lg p-4 font-mono text-xs h-48 overflow-hidden shadow-xl backdrop-blur-md flex flex-col">
-           <div className="flex items-center gap-2 border-b border-gray-800 pb-2 mb-2 shrink-0">
-              <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></div>
-              <div className="w-2 h-2 rounded-full bg-yellow-500 animate-pulse" style={{animationDelay: '0.1s'}}></div>
-              <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" style={{animationDelay: '0.2s'}}></div>
-              <span className="text-cyan-500 ml-2 font-bold tracking-wider flex items-center gap-2">
-                  <Terminal size={12} /> NEURAL ENGINE LOG
-              </span>
+           <div className="flex items-center justify-between border-b border-gray-800 pb-2 mb-2 shrink-0">
+              <div className="flex items-center gap-2">
+                <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></div>
+                <div className="w-2 h-2 rounded-full bg-yellow-500 animate-pulse" style={{animationDelay: '0.1s'}}></div>
+                <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" style={{animationDelay: '0.2s'}}></div>
+                <span className="text-cyan-500 ml-2 font-bold tracking-wider flex items-center gap-2">
+                    <Terminal size={12} /> NEURAL ENGINE LOG
+                </span>
+              </div>
+              <button onClick={handleCopy} className="text-gray-500 hover:text-white transition-colors" title="Copy Logs">
+                  <Copy size={12} />
+              </button>
            </div>
-           <div className="flex flex-col-reverse flex-1 overflow-y-auto custom-scrollbar">
-               {logs.slice().reverse().map((log, i) => {
-                   const Icon = log.icon || Zap;
+           <div ref={scrollRef} className="flex flex-col flex-1 overflow-y-auto custom-scrollbar scroll-smooth">
+               {logs.length === 0 && (
+                   <div className="text-gray-600 italic py-2">Waiting for data stream...</div>
+               )}
+               {logs.map((log, i) => {
                    const color = log.color || 'text-cyan-400';
                    return (
                        <div key={i} className="flex items-start gap-3 py-1.5 animate-fade-in border-b border-white/5 last:border-0">
@@ -95,9 +116,6 @@ const AnalysisView: React.FC<AnalysisViewProps> = ({ imageSrc, logs, boxes }) =>
                        </div>
                    )
                })}
-               {logs.length === 0 && (
-                   <div className="text-gray-600 italic py-2">Waiting for data stream...</div>
-               )}
            </div>
         </div>
 
