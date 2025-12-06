@@ -175,7 +175,7 @@ function extractDataFromLog(logText: string): Partial<FilamentData> {
     
     // Extract brand - improved to handle various formats
     // Matches: "Detected brand: OVERTURE®" or "brand name: Overture" or "Brand is OVERTURE"
-    const brandMatch = logText.match(/(?:detected\s+)?(?:brand|manufacturer)(?:\s+name)?[\s:]+([A-Z][A-Za-z0-9\s&®™-]+?)(?:\s*$|\.|\,|;)/i);
+    const brandMatch = logText.match(/(?:detected\s+)?(?:brand|manufacturer)(?:\s+name)?[\s:]+([A-Z][A-Za-z0-9\s&®™-]+?)(?:\s*$|\.|,|;)/i);
     if (brandMatch) {
         const brand = brandMatch[1].trim();
         // Validate: must be more than just "name" or generic words
@@ -186,7 +186,7 @@ function extractDataFromLog(logText: string): Partial<FilamentData> {
     
     // Extract material - improved to handle composite names
     // Matches: "ROCK PLA", "PLA+", "PETG", "ABS", etc.
-    const materialMatch = logText.match(/(?:detected\s+)?(?:material|type)(?:\s+type)?[\s:]+([A-Z][A-Za-z0-9\s+\-]+?)(?:\s+3D|\s+filament|\s*$|\.|\,|;)/i);
+    const materialMatch = logText.match(/(?:detected\s+)?(?:material|type)(?:\s+type)?[\s:]+([A-Z][A-Za-z0-9\s+\-]+?)(?:\s+3D|\s+filament|\s*$|\.|,|;)/i);
     if (materialMatch) {
         const material = materialMatch[1].trim();
         // Validate: must not be a sentence fragment
@@ -197,7 +197,7 @@ function extractDataFromLog(logText: string): Partial<FilamentData> {
     
     // Extract color name - improved to avoid sentence fragments
     // Matches: "Mars Red", "Red", "Blue" but not "name on a separate"
-    const colorMatch = logText.match(/(?:detected\s+)?(?:color|colour)(?:\s+name)?[\s:]+([A-Z][A-Za-z\s-]+?)(?:\s*$|\.|\,|;|\(|\s+from)/i);
+    const colorMatch = logText.match(/(?:detected\s+)?(?:color|colour)(?:\s+name)?[\s:]+([A-Z][A-Za-z\s-]+?)(?:\s*$|\.|,|;|\(|\s+from)/i);
     if (colorMatch) {
         const color = colorMatch[1].trim();
         // Validate: must be a reasonable color name, not a sentence
