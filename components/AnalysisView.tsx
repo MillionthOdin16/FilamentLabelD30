@@ -109,6 +109,7 @@ const AnalysisView: React.FC<AnalysisViewProps> = ({ imageSrc, logs, boxes, onCo
   const { success } = useToast();
   const [processingStage, setProcessingStage] = useState<string>('Initializing');
   const [keySummary, setKeySummary] = useState<string[]>([]); // Track key findings
+  const processedLogsCount = useRef(0); // Track how many logs we've processed
 
   useEffect(() => {
       if (scrollRef.current) {
@@ -121,44 +122,52 @@ const AnalysisView: React.FC<AnalysisViewProps> = ({ imageSrc, logs, boxes, onCo
     setProcessingStage(detectProcessingStage(logs));
   }, [logs]);
 
-  // Extract key findings from logs
+  // Extract key findings from logs - accumulate and score
   useEffect(() => {
+    // Only process new logs
+    if (logs.length <= processedLogsCount.current) return;
+    
     const newFindings: string[] = [];
     
     // Process only new logs since last check
-    logs.forEach(log => {
+    for (let i = processedLogsCount.current; i < logs.length; i++) {
+      const log = logs[i];
       if (isKeyFinding(log.text)) {
-        // Only add if not already present (avoid duplicates)
-        if (!keySummary.includes(log.text)) {
-          newFindings.push(log.text);
-        }
+        newFindings.push(log.text);
       }
-    });
-    
-    if (newFindings.length > 0) {
-      // Accumulate findings, don't replace
-      const allFindings = [...keySummary, ...newFindings];
-      
-      // Score and sort all findings
-      const scoredFindings = allFindings.map(finding => ({
-        text: finding,
-        score: scoreFinding(finding)
-      }));
-      
-      // Keep top 8 findings sorted by score
-      const topFindings = scoredFindings
-        .sort((a, b) => b.score - a.score)
-        .slice(0, 8)
-        .map(f => f.text);
-      
-      setKeySummary(topFindings);
     }
     
-    // Pass summary to parent when complete
+    processedLogsCount.current = logs.length;
+    
+    if (newFindings.length > 0) {
+      setKeySummary(prev => {
+        // Accumulate findings, don't replace
+        const allFindings = [...prev, ...newFindings];
+        
+        // Remove duplicates
+        const uniqueFindings = Array.from(new Set(allFindings));
+        
+        // Score and sort all findings
+        const scoredFindings = uniqueFindings.map(finding => ({
+          text: finding,
+          score: scoreFinding(finding)
+        }));
+        
+        // Keep top 8 findings sorted by score
+        return scoredFindings
+          .sort((a, b) => b.score - a.score)
+          .slice(0, 8)
+          .map(f => f.text);
+      });
+    }
+  }, [logs.length]); // Only trigger when new logs arrive
+  
+  // Pass summary to parent when analysis completes
+  useEffect(() => {
     if (onComplete && processingStage === 'Complete' && keySummary.length > 0) {
       onComplete(keySummary.join('. '));
     }
-  }, [logs.length, processingStage, onComplete]); // Only trigger on log count change, not every log content change
+  }, [processingStage, keySummary, onComplete]);
 
   const handleCopy = () => {
       const text = logs.map(l => l.text).join('\n');
