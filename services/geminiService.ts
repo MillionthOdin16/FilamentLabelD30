@@ -2,6 +2,27 @@
 import { GoogleGenAI } from "@google/genai";
 import { FilamentData } from "../types";
 
+// Use proxy server to bypass CORS in development/testing
+const USE_PROXY = true;
+const PROXY_URL = 'http://localhost:3002/api/gemini';
+
+// Monkey-patch fetch to redirect Gemini API calls through proxy
+if (USE_PROXY && typeof window !== 'undefined') {
+  const originalFetch = window.fetch;
+  window.fetch = function(url: RequestInfo | URL, options?: RequestInit) {
+    const urlString = typeof url === 'string' ? url : url.toString();
+    
+    // Redirect Gemini API calls through proxy
+    if (urlString.includes('generativelanguage.googleapis.com')) {
+      const proxyUrl = urlString.replace('https://generativelanguage.googleapis.com', PROXY_URL);
+      console.log(`[FETCH INTERCEPT] Redirecting to proxy: ${proxyUrl.split('?')[0]}`);
+      return originalFetch(proxyUrl, options);
+    }
+    
+    return originalFetch(url, options);
+  };
+}
+
 // Define structured output schema for Gemini (inline definition)
 const FilamentAnalysisSchema = {
   type: "object" as const,
