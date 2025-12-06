@@ -58,11 +58,11 @@ Do not wrap JSON in markdown blocks.
 
 
 const MAX_RETRIES = 2;
+const MIN_LOG_LINE_LENGTH = 5;
 
 // Helper function to extract detected data from log text
 function extractDataFromLog(logText: string): Partial<FilamentData> {
     const result: Partial<FilamentData> = {};
-    const lower = logText.toLowerCase();
     
     // Extract brand
     const brandMatch = logText.match(/(?:brand|manufacturer)[\s:]+([A-Z][A-Za-z0-9\s&®™]+?)(?:\.|$|,)/i);
@@ -76,19 +76,19 @@ function extractDataFromLog(logText: string): Partial<FilamentData> {
     const colorMatch = logText.match(/(?:color|colour)[\s:]+([A-Za-z\s]+?)(?:\.|$|,|\()/i);
     if (colorMatch) result.colorName = colorMatch[1].trim();
     
-    // Extract color hex
+    // Extract color hex (validates format)
     const hexMatch = logText.match(/#([A-Fa-f0-9]{6})/);
     if (hexMatch) result.colorHex = '#' + hexMatch[1].toUpperCase();
     
-    // Extract nozzle temperature range
-    const nozzleMatch = logText.match(/nozzle\s*(?:temp|temperature)[\s:]*(\d+)[-–](\d+)\s*°?C/i);
+    // Extract nozzle temperature range (handles various dash types)
+    const nozzleMatch = logText.match(/nozzle\s*(?:temp|temperature)[\s:]*(\d+)\s*[-–—]\s*(\d+)\s*°?C/i);
     if (nozzleMatch) {
         result.minTemp = parseInt(nozzleMatch[1]);
         result.maxTemp = parseInt(nozzleMatch[2]);
     }
     
-    // Extract bed temperature range  
-    const bedMatch = logText.match(/bed\s*(?:temp|temperature)[\s:]*(\d+)[-–](\d+)\s*°?C/i);
+    // Extract bed temperature range (handles various dash types)
+    const bedMatch = logText.match(/bed\s*(?:temp|temperature)[\s:]*(\d+)\s*[-–—]\s*(\d+)\s*°?C/i);
     if (bedMatch) {
         result.bedTempMin = parseInt(bedMatch[1]);
         result.bedTempMax = parseInt(bedMatch[2]);
@@ -183,7 +183,7 @@ export const analyzeFilamentImage = async (
                         const coords = parts[2].split(',').map(n => parseInt(n.trim()));
                         if (coords.length === 4) onBox({ label, rect: coords });
                     }
-                } else if (onLog && line.length > 5) {
+                } else if (onLog && line.length > MIN_LOG_LINE_LENGTH) {
                     // Fallback: treat as log even without LOG: prefix
                     // This handles cases where Gemini doesn't follow format
                     onLog({ text: line, color: 'text-gray-400' });

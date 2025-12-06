@@ -14,6 +14,12 @@ interface AnalysisViewProps {
 
 // Constants
 const ESTIMATED_TOTAL_OPERATIONS = 15;
+const MIN_SUBSTANTIVE_TEXT_LENGTH = 15;
+
+// Helper function to validate and sanitize hex color
+function isValidHexColor(hex: string): boolean {
+  return /^#[A-Fa-f0-9]{6}$/.test(hex);
+}
 
 // Helper function to detect processing stage from log content
 const detectProcessingStage = (logs: {text: string}[]): string => {
@@ -59,8 +65,8 @@ const isKeyFinding = (text: string): boolean => {
                            lowerText.includes('validating') ||
                            lowerText.includes('finalizing');
   
-  // Must be substantive (>15 chars to allow shorter detected values)
-  const isSubstantive = text.length > 15;
+  // Must be substantive
+  const isSubstantive = text.length > MIN_SUBSTANTIVE_TEXT_LENGTH;
   
   return isSubstantive && (hasActionWord || hasDataPattern) && !isGenericMessage;
 };
@@ -245,7 +251,7 @@ const AnalysisView: React.FC<AnalysisViewProps> = ({ imageSrc, logs, boxes, onCo
                 <div className="bg-black/30 rounded px-2 py-1.5 animate-fade-in">
                   <div className="text-[9px] text-gray-500 uppercase mb-0.5">Color</div>
                   <div className="text-xs text-green-300 font-medium flex items-center gap-1.5">
-                    {detectedData.colorHex && (
+                    {detectedData.colorHex && isValidHexColor(detectedData.colorHex) && (
                       <div className="w-3 h-3 rounded-sm border border-white/20" style={{backgroundColor: detectedData.colorHex}}></div>
                     )}
                     {detectedData.colorName}
