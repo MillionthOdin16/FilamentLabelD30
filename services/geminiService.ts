@@ -194,35 +194,43 @@ const MIN_LOG_LINE_LENGTH = 5;
 function extractDataFromLog(logText: string): Partial<FilamentData> {
     const result: Partial<FilamentData> = {};
     
-    // Extract brand - improved to handle various formats
-    // Matches: "Detected brand: OVERTURE®" or "brand name: Overture" or "Brand is OVERTURE"
-    const brandMatch = logText.match(/(?:detected\s+)?(?:brand|manufacturer)(?:\s+name)?[\s:]+([A-Z][A-Za-z0-9\s&®™-]+?)(?:\s*$|\.|,|;)/i);
+    // Extract brand - STRICT: only match "Detected brand:" format
+    // Matches: "Detected brand: OVERTURE®" or "Detected brand name: Overture"
+    const brandMatch = logText.match(/Detected\s+(?:brand|manufacturer)(?:\s+name)?:\s*([A-Z][A-Za-z0-9\s&®™-]+?)(?:\s*$|\.)/i);
     if (brandMatch) {
         const brand = brandMatch[1].trim();
-        // Validate: must be more than just "name" or generic words
-        if (brand.length > 2 && !['name', 'brand', 'manufacturer', 'the', 'is'].includes(brand.toLowerCase())) {
+        // Validate: must be more than just "name" or generic words, and not too long
+        if (brand.length > 2 && brand.length < 50 && !['name', 'brand', 'manufacturer', 'the', 'is'].includes(brand.toLowerCase())) {
             result.brand = brand;
         }
     }
     
-    // Extract material - improved to handle composite names
-    // Matches: "ROCK PLA", "PLA+", "PETG", "ABS", etc.
-    const materialMatch = logText.match(/(?:detected\s+)?(?:material|type)(?:\s+type)?[\s:]+([A-Z][A-Za-z0-9\s+\-]+?)(?:\s+3D|\s+filament|\s*$|\.|,|;)/i);
+    // Extract material - STRICT: only match "Detected material:" format
+    // Matches: "Detected material: ROCK PLA" or "Detected material type: PETG"
+    const materialMatch = logText.match(/Detected\s+(?:material|type)(?:\s+type)?:\s*([A-Z][A-Za-z0-9\s+\-]+?)(?:\s*$|\.)/i);
     if (materialMatch) {
         const material = materialMatch[1].trim();
-        // Validate: must not be a sentence fragment
-        if (material.length <= 30 && !material.toLowerCase().includes('may not') && !material.toLowerCase().includes('inherently')) {
+        // Validate: must not be a sentence fragment and reasonable length
+        if (material.length <= 30 && material.length > 2 && 
+            !material.toLowerCase().includes('may not') && 
+            !material.toLowerCase().includes('inherently') &&
+            !material.toLowerCase().includes('with ') &&
+            !material.toLowerCase().includes('made ')) {
             result.material = material;
         }
     }
     
-    // Extract color name - improved to avoid sentence fragments
-    // Matches: "Mars Red", "Red", "Blue" but not "name on a separate"
-    const colorMatch = logText.match(/(?:detected\s+)?(?:color|colour)(?:\s+name)?[\s:]+([A-Z][A-Za-z\s-]+?)(?:\s*$|\.|,|;|\(|\s+from)/i);
+    // Extract color name - STRICT: only match "Detected color:" format  
+    // Matches: "Detected color name: Mars Red" or "Detected color: Red"
+    const colorMatch = logText.match(/Detected\s+(?:color|colour)(?:\s+name)?:\s*([A-Z][A-Za-z\s-]+?)(?:\s*$|\.)/i);
     if (colorMatch) {
         const color = colorMatch[1].trim();
-        // Validate: must be a reasonable color name, not a sentence
-        if (color.length <= 30 && !color.toLowerCase().includes('name on') && !color.toLowerCase().includes('separate')) {
+        // Validate: must be a reasonable color name, not a sentence, not too long
+        if (color.length <= 30 && color.length > 2 &&
+            !color.toLowerCase().includes('name on') && 
+            !color.toLowerCase().includes('separate') &&
+            !color.toLowerCase().includes('and ') &&
+            !color.toLowerCase().includes('provide')) {
             result.colorName = color;
         }
     }
