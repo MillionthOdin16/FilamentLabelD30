@@ -202,14 +202,27 @@ const App: React.FC = () => {
     // Add initial log
     setAnalysisLogs([{ text: "INITIALIZING OPTICAL SCAN...", color: "text-blue-400" }]);
 
+    // Track detected data in real-time
+    let accumulatedData: Partial<FilamentData> = {};
+
     try {
       const data = await analyzeFilamentImage(
           imageSrc,
           (log) => setAnalysisLogs(prev => [...prev, log]),
-          (box) => setAnalysisBoxes(prev => [...prev, box])
+          (box) => setAnalysisBoxes(prev => [...prev, box]),
+          (partialData) => {
+            // Merge newly detected data
+            accumulatedData = { ...accumulatedData, ...partialData };
+            
+            // Update form fields immediately as data is detected
+            setFilamentData(prev => ({
+              ...prev,
+              ...partialData
+            }));
+          }
       );
 
-      // Enrich data with analysis summary if available
+      // Enrich final data with analysis summary if available
       const enrichedData = { 
         ...data, 
         source: data.source || 'Gemini 2.5 Flash',

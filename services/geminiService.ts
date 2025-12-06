@@ -6,17 +6,41 @@ const SYSTEM_INSTRUCTION = `
 You are an expert 3D Printing Assistant and Materials Engineer. 
 Your task is to accurately identify 3D printer filament specifications from an image of a spool label.
 
+**CRITICAL: OUTPUT FORMAT**
+You MUST follow this EXACT format for ALL your output:
+1. Every single line of analysis MUST start with "LOG: " prefix
+2. Every bounding box MUST start with "BOX: " prefix  
+3. The final JSON MUST be on its own line, no prefix
+
+Example of CORRECT format:
+LOG: Initializing optical character recognition
+LOG: Detected brand: Overture
+BOX: Brand [100, 200, 150, 400]
+LOG: Detected material: ROCK PLA
+BOX: Material [200, 180, 240, 450]
+LOG: Detected color: Mars Red (#D76D3B)
+LOG: Detected nozzle temp: 190-230°C
+LOG: Detected bed temp: 50-70°C
+LOG: Detected weight: 1kg
+LOG: Found filament diameter: 1.75mm
+LOG: Composite material detected - abrasive, requires hardened nozzle
+{"brand":"Overture","material":"ROCK PLA",...}
+
+DO NOT output plain text without "LOG: " prefix. 
+DO NOT skip the "LOG: " or "BOX: " prefixes.
+If you do not follow this format, the system will FAIL.
+
 **EXECUTION STEPS:**
-1. **OCR & Extraction:** Read all visible text on the label. Look for Brand, Material (PLA, PETG, ABS, etc.), Color, Temperatures, and Weight.
-2. **Search Grounding:** Use Google Search to find the specific manufacturer's product page for this exact filament to confirm specifications (Temps, Density, Hygroscopy).
-3. **Color Analysis:** If the color name is missing, analyze the image of the filament itself.
-4. **Validation:** Ensure the temperatures match the manufacturer's recommended settings found online.
+1. **OCR & Extraction:** Read all visible text on the label. Output each finding with LOG: prefix
+2. **Bounding Boxes:** For each detected text region, output BOX: with coordinates
+3. **Search Grounding:** Use Google Search to validate. Output search findings with LOG: prefix
+4. **Color Analysis:** Analyze filament color if needed. Output with LOG: prefix
+5. **Validation:** Confirm temperatures. Output validation with LOG: prefix
 
 **OUTPUT REQUIREMENTS:**
-You must strictly output valid JSON. 
-The JSON object must have the following keys:
+Final JSON object must have these keys:
 - brand (string)
-- material (string)
+- material (string)  
 - colorName (string)
 - colorHex (string)
 - minTemp (number)
@@ -24,44 +48,64 @@ The JSON object must have the following keys:
 - bedTempMin (number)
 - bedTempMax (number)
 - weight (string)
-- notes (string)
+- notes (string) - Include ALL interesting details: diameter, spool weight, length, abrasiveness, composite info, etc.
 - hygroscopy ('low' | 'medium' | 'high')
 - confidence (number, 0-100)
 - alternatives (array of objects with brand, material, colorName)
 
-**REAL-TIME LOGGING:**
-Before outputting the final JSON, you MUST "think out loud" by printing log lines as you process the image.
-Start every log line with "LOG: ".
-Start every bounding box detection with "BOX: ".
-Format:
-LOG: <Action description>
-BOX: <Label> [ymin, xmin, ymax, xmax] (0-1000 scale)
-
-Be descriptive and detailed in your logs to show progress. Examples:
-LOG: Initializing optical character recognition...
-LOG: Scanning image for text regions...
-LOG: Detected brand logo "Overture" in upper left quadrant
-BOX: Brand [100, 200, 150, 400]
-LOG: Extracting material type from label...
-LOG: Found material identifier: PLA
-BOX: Material [200, 180, 240, 450]
-LOG: Analyzing color spectrum from filament spool...
-LOG: Dominant color detected: Orange/Red tones
-LOG: Initiating web search for manufacturer specifications...
-LOG: Validating temperature ranges against official data...
-LOG: Cross-referencing product details...
-LOG: Finalizing analysis results...
-
-Finally, output the JSON object.
-Do not wrap the output in markdown blocks.
+Do not wrap JSON in markdown blocks.
 `;
 
+
 const MAX_RETRIES = 2;
+
+// Helper function to extract detected data from log text
+function extractDataFromLog(logText: string): Partial<FilamentData> {
+    const result: Partial<FilamentData> = {};
+    const lower = logText.toLowerCase();
+    
+    // Extract brand
+    const brandMatch = logText.match(/(?:brand|manufacturer)[\s:]+([A-Z][A-Za-z0-9\s&®™]+?)(?:\.|$|,)/i);
+    if (brandMatch) result.brand = brandMatch[1].trim();
+    
+    // Extract material
+    const materialMatch = logText.match(/(?:material|type)[\s:]+([A-Z][A-Za-z0-9\s+-]+?)(?:\.|$|,)/i);
+    if (materialMatch) result.material = materialMatch[1].trim();
+    
+    // Extract color name
+    const colorMatch = logText.match(/(?:color|colour)[\s:]+([A-Za-z\s]+?)(?:\.|$|,|\()/i);
+    if (colorMatch) result.colorName = colorMatch[1].trim();
+    
+    // Extract color hex
+    const hexMatch = logText.match(/#([A-Fa-f0-9]{6})/);
+    if (hexMatch) result.colorHex = '#' + hexMatch[1].toUpperCase();
+    
+    // Extract nozzle temperature range
+    const nozzleMatch = logText.match(/nozzle\s*(?:temp|temperature)[\s:]*(\d+)[-–](\d+)\s*°?C/i);
+    if (nozzleMatch) {
+        result.minTemp = parseInt(nozzleMatch[1]);
+        result.maxTemp = parseInt(nozzleMatch[2]);
+    }
+    
+    // Extract bed temperature range  
+    const bedMatch = logText.match(/bed\s*(?:temp|temperature)[\s:]*(\d+)[-–](\d+)\s*°?C/i);
+    if (bedMatch) {
+        result.bedTempMin = parseInt(bedMatch[1]);
+        result.bedTempMax = parseInt(bedMatch[2]);
+    }
+    
+    // Extract weight
+    const weightMatch = logText.match(/(?:weight|mass)[\s:]*(\d+\.?\d*\s*(?:kg|g|lb))/i);
+    if (weightMatch) result.weight = weightMatch[1].trim();
+    
+    return result;
+}
 
 export const analyzeFilamentImage = async (
     base64Image: string,
     onLog?: (log: {text: string, icon?: any, color?: string}) => void,
-    onBox?: (box: {label: string, rect: number[]}) => void
+    onBox?: (box: {label: string, rect: number[]}) => void,
+    onDataDetected?: (partialData: Partial<FilamentData>) => void
 ): Promise<FilamentData> => {
   const apiKey = process.env.API_KEY || (window as any).GEMINI_API_KEY; // Support both env and injected global
   if (!apiKey) {
@@ -80,7 +124,7 @@ export const analyzeFilamentImage = async (
             contents: {
                 parts: [
                 { inlineData: { mimeType: "image/jpeg", data: cleanBase64 } },
-                { text: "Analyze this filament spool. Stream your thought process logs and bounding boxes, then output the final JSON." }
+                { text: "Analyze this filament spool. Stream your thought process logs with LOG: prefix, bounding boxes with BOX: prefix, then output the final JSON." }
                 ]
             },
             config: {
@@ -116,15 +160,40 @@ export const analyzeFilamentImage = async (
                 const line = textBuffer.slice(0, newlineIndex).trim();
                 textBuffer = textBuffer.slice(newlineIndex + 1);
 
+                // Skip empty lines and JSON markers
+                if (!line || line.startsWith('{') || line.startsWith('}') || line.startsWith('```')) {
+                    continue;
+                }
+
                 if (line.startsWith('LOG: ') && onLog) {
                     const msg = line.replace('LOG: ', '').trim();
                     onLog({ text: msg, color: 'text-cyan-400' });
+                    
+                    // Extract data from log in real-time
+                    if (onDataDetected) {
+                        const extractedData = extractDataFromLog(msg);
+                        if (Object.keys(extractedData).length > 0) {
+                            onDataDetected(extractedData);
+                        }
+                    }
                 } else if (line.startsWith('BOX: ') && onBox) {
                      const parts = line.match(/BOX: (.*?) \[([\d,\s]+)\]/);
                     if (parts) {
                         const label = parts[1];
                         const coords = parts[2].split(',').map(n => parseInt(n.trim()));
                         if (coords.length === 4) onBox({ label, rect: coords });
+                    }
+                } else if (onLog && line.length > 5) {
+                    // Fallback: treat as log even without LOG: prefix
+                    // This handles cases where Gemini doesn't follow format
+                    onLog({ text: line, color: 'text-gray-400' });
+                    
+                    // Also try to extract data from non-prefixed logs
+                    if (onDataDetected) {
+                        const extractedData = extractDataFromLog(line);
+                        if (Object.keys(extractedData).length > 0) {
+                            onDataDetected(extractedData);
+                        }
                     }
                 }
             }

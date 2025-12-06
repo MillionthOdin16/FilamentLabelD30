@@ -40,21 +40,27 @@ const detectProcessingStage = (logs: {text: string}[]): string => {
 const isKeyFinding = (text: string): boolean => {
   const lowerText = text.toLowerCase();
   
-  // Must contain one of these action words
+  // Must contain one of these action words OR specific data patterns
   const hasActionWord = lowerText.includes('detected') || 
                         lowerText.includes('found') || 
                         lowerText.includes('identified') || 
                         lowerText.includes('extracted');
   
+  // Also match specific data patterns (brand, material, color, temps, etc.)
+  const hasDataPattern = /(?:brand|material|color|nozzle|bed|temp|weight|diameter|spool)[\s:]+/i.test(text);
+  
   // Skip generic progress messages
   const isGenericMessage = lowerText.includes('scanning') || 
                            lowerText.includes('analyzing') || 
-                           lowerText.includes('initializing');
+                           lowerText.includes('initializing') ||
+                           lowerText.includes('initiating') ||
+                           lowerText.includes('validating') ||
+                           lowerText.includes('finalizing');
   
-  // Must be substantive (>20 chars)
-  const isSubstantive = text.length > 20;
+  // Must be substantive (>15 chars to allow shorter detected values)
+  const isSubstantive = text.length > 15;
   
-  return hasActionWord && !isGenericMessage && isSubstantive;
+  return isSubstantive && (hasActionWord || hasDataPattern) && !isGenericMessage;
 };
 
 const AnalysisView: React.FC<AnalysisViewProps> = ({ imageSrc, logs, boxes, onComplete }) => {
