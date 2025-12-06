@@ -26,3 +26,6 @@ dist-ssr
 # Testing artifacts
 playwright-report
 test-results
+
+# Demo and temporary files
+mock-analysis-demo.js
