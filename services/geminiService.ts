@@ -258,9 +258,10 @@ export const analyzeFilamentImage = async (
     onBox?: (box: {label: string, rect: number[]}) => void,
     onDataDetected?: (partialData: Partial<FilamentData>) => void
 ): Promise<FilamentData> => {
-  const apiKey = process.env.API_KEY || (window as any).GEMINI_API_KEY; // Support both env and injected global
+  // Get API key from environment variable (set via GitHub secrets)
+  const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
   if (!apiKey) {
-    throw new Error("API Key not found");
+    throw new Error("API Key not found. Set VITE_GEMINI_API_KEY environment variable.");
   }
 
   const ai = new GoogleGenAI({ apiKey });

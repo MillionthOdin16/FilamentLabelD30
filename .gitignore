@@ -29,3 +29,4 @@ test-results
 
 # Demo and temporary files
 mock-analysis-demo.js
+.env
