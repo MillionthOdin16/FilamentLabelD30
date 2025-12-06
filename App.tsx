@@ -284,13 +284,16 @@ const App: React.FC = () => {
           }
       );
 
-      // Enrich final data with analysis summary if available
+      // Merge final JSON data with accumulated real-time data
+      // Priority: accumulated real-time data > final JSON data > defaults
       const enrichedData = { 
-        ...data, 
+        ...data, // Start with parsed JSON (may have defaults if parsing failed)
+        ...accumulatedData, // Override with accumulated real-time data (highest priority)
         source: data.source || 'Gemini 2.5 Flash',
         notes: analysisSummary ? `${data.notes || ''}${data.notes ? '\n\n' : ''}Analysis findings: ${analysisSummary}` : data.notes
       };
       
+      // Final update with merged data
       setFilamentData(enrichedData);
       saveToHistory(enrichedData);
       setState(AppState.EDITING);
