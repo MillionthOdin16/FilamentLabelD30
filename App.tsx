@@ -279,8 +279,10 @@ const App: React.FC = () => {
                 console.log(`[DEBUG] Field ${k}: current="${currentValue}", new="${newValue}", confidence=${dataConfidence[k]}`);
                 
                 // Update if current is default/empty or new value is better
-                if (!currentValue || currentValue === 'GENERIC' || currentValue === 'White' || 
-                    currentValue === '' || currentValue === 'PLA') {
+                // Check if current value matches default for this field
+                const isDefault = !currentValue || currentValue === '' || currentValue === DEFAULT_DATA[k];
+                
+                if (isDefault) {
                   console.log(`[DEBUG] Updating ${k} to "${newValue}" (current is default)`);
                   updated[k] = newValue as any;
                 } else if (dataConfidence[k] > 2) {
@@ -316,8 +318,20 @@ const App: React.FC = () => {
       saveToHistory(enrichedData);
       setState(AppState.EDITING);
     } catch (err: any) {
-      setErrorMsg("Could not analyze image automatically. Please enter details manually.");
-      setFilamentData(DEFAULT_DATA);
+      console.log('[ERROR] Gemini analysis failed, but using accumulated real-time data');
+      console.log('[DEBUG] accumulatedData:', JSON.stringify(accumulatedData));
+      
+      // Use accumulated real-time data even if JSON parsing failed
+      const fallbackData = {
+        ...DEFAULT_DATA,
+        ...accumulatedData, // Preserve any data extracted during analysis
+      };
+      
+      setErrorMsg(Object.keys(accumulatedData).length > 0 ? 
+        "Partial analysis complete. Some fields extracted successfully." : 
+        "Could not analyze image automatically. Please enter details manually.");
+      setFilamentData(fallbackData);
+      saveToHistory(fallbackData);
       setState(AppState.EDITING);
     }
   };
