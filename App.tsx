@@ -318,7 +318,7 @@ const App: React.FC = () => {
       saveToHistory(enrichedData);
       setState(AppState.EDITING);
     } catch (err: any) {
-      console.log('[ERROR] Gemini analysis failed, but using accumulated real-time data');
+      console.log('[ERROR] Gemini analysis failed:', err.message || err);
       console.log('[DEBUG] accumulatedData:', JSON.stringify(accumulatedData));
       
       // Use accumulated real-time data even if JSON parsing failed
@@ -327,9 +327,15 @@ const App: React.FC = () => {
         ...accumulatedData, // Preserve any data extracted during analysis
       };
       
-      setErrorMsg(Object.keys(accumulatedData).length > 0 ? 
-        "Partial analysis complete. Some fields extracted successfully." : 
-        "Could not analyze image automatically. Please enter details manually.");
+      // Provide specific error message based on error type
+      let errorMessage = "Could not analyze image automatically. Please enter details manually.";
+      if (err.message && err.message.includes("API Key not found")) {
+        errorMessage = "⚠️ API key not configured. Please set up VITE_GEMINI_API_KEY. See ENV_SETUP.md for instructions.";
+      } else if (Object.keys(accumulatedData).length > 0) {
+        errorMessage = "Partial analysis complete. Some fields extracted successfully.";
+      }
+      
+      setErrorMsg(errorMessage);
       setFilamentData(fallbackData);
       saveToHistory(fallbackData);
       setState(AppState.EDITING);

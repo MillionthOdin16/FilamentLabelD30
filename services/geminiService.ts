@@ -269,7 +269,13 @@ export const analyzeFilamentImage = async (
   // Get API key from environment variable (set via GitHub secrets)
   const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
   if (!apiKey) {
-    throw new Error("API Key not found. Set VITE_GEMINI_API_KEY environment variable.");
+    // Log error for user visibility
+    if (onLog) {
+      onLog({ text: "❌ ERROR: Gemini API key not configured", color: "text-red-500" });
+      onLog({ text: "Please set VITE_GEMINI_API_KEY in environment variables or .env file", color: "text-yellow-500" });
+      onLog({ text: "See ENV_SETUP.md for configuration instructions", color: "text-yellow-500" });
+    }
+    throw new Error("API Key not found. Please configure VITE_GEMINI_API_KEY environment variable. See ENV_SETUP.md for instructions.");
   }
 
   const ai = new GoogleGenAI({ apiKey });
