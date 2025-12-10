@@ -299,19 +299,21 @@ const LabelEditor: React.FC<LabelEditorProps> = ({
 
         {/* Open Date */}
         <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="text-xs text-gray-400 uppercase font-bold tracking-wider mb-1 flex items-center gap-1.5">
-                <CalendarPlus size={12} className="text-cyan-500" />
-                Open Date
-            </label>
-            <input 
-              type="date" 
-              value={data.openDate || ''} 
-              onChange={(e) => handleChange('openDate', e.target.value)}
-              className="w-full bg-gray-950 border border-gray-750 rounded p-2 text-white text-sm focus:border-cyan-500 outline-none"
-            />
-          </div>
-          <div>
+          {settings.visibleFields.date && (
+            <div>
+              <label className="text-xs text-gray-400 uppercase font-bold tracking-wider mb-1 flex items-center gap-1.5">
+                  <CalendarPlus size={12} className="text-cyan-500" />
+                  Open Date
+              </label>
+              <input
+                type="date"
+                value={data.openDate || ''}
+                onChange={(e) => handleChange('openDate', e.target.value)}
+                className="w-full bg-gray-950 border border-gray-750 rounded p-2 text-white text-sm focus:border-cyan-500 outline-none"
+              />
+            </div>
+          )}
+          <div className={settings.visibleFields.date ? '' : 'col-span-2'}>
             <label className="text-xs text-gray-400 uppercase font-bold tracking-wider mb-1 flex items-center gap-1.5">
                 <Droplets size={12} className={`${data.hygroscopy === 'high' ? 'text-red-400' : data.hygroscopy === 'medium' ? 'text-yellow-400' : 'text-green-400'}`} />
                 Hygroscopy
