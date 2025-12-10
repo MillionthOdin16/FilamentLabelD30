@@ -3,7 +3,7 @@ import { GoogleGenAI } from "@google/genai";
 import { FilamentData } from "../types";
 
 // Use proxy server to bypass CORS in development/testing
-const USE_PROXY = true;
+const USE_PROXY = import.meta.env.VITE_USE_PROXY !== 'false';
 const PROXY_URL = 'http://localhost:3002/api/gemini';
 
 // Monkey-patch fetch to redirect Gemini API calls through proxy
