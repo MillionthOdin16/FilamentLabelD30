@@ -73,6 +73,8 @@ const App: React.FC = () => {
   // Analysis State
   const [analysisLogs, setAnalysisLogs] = useState<{text: string, icon?: any, color?: string}[]>([]);
   const [analysisBoxes, setAnalysisBoxes] = useState<any[]>([]);
+  const [analysisSummary, setAnalysisSummary] = useState<string>('');
+  const [analysisDetectedData, setAnalysisDetectedData] = useState<Partial<FilamentData>>({});
 
   // Batch Printing State
   const [batchQueue, setBatchQueue] = useState<PrintJob[]>([]);
@@ -196,24 +198,146 @@ const App: React.FC = () => {
     setState(AppState.ANALYZING);
     setAnalysisLogs([]); // Clear previous logs
     setAnalysisBoxes([]);
+    setAnalysisSummary('');
+    setAnalysisDetectedData({}); // Clear previous detected data
+    
+    // Reset to defaults for new analysis
+    setFilamentData(DEFAULT_DATA);
 
     // Add initial log
     setAnalysisLogs([{ text: "INITIALIZING OPTICAL SCAN...", color: "text-blue-400" }]);
+
+    // Track detected data with confidence scoring
+    let accumulatedData: Partial<FilamentData> = {};
+    let dataConfidence: Record<string, number> = {}; // Track confidence for each field
 
     try {
       const data = await analyzeFilamentImage(
           imageSrc,
           (log) => setAnalysisLogs(prev => [...prev, log]),
-          (box) => setAnalysisBoxes(prev => [...prev, box])
+          (box) => setAnalysisBoxes(prev => [...prev, box]),
+          (partialData) => {
+            // Smart merging: allow updates if new data seems more specific/accurate
+            Object.keys(partialData).forEach(key => {
+              const k = key as keyof FilamentData;
+              const oldValue = accumulatedData[k];
+              const newValue = partialData[k];
+              
+              if (!newValue) return; // Skip empty values
+              
+              // Calculate confidence score for new value
+              let confidence = 1;
+              
+              // Higher confidence for longer, more specific values
+              if (typeof newValue === 'string') {
+                confidence = Math.min(newValue.length / 10, 3); // Longer = more confident
+                
+                // Brand-specific logic
+                if (k === 'brand') {
+                  const lowerValue = newValue.toLowerCase();
+                  // Penalize generic/reseller terms
+                  if (lowerValue.includes('amazon') || lowerValue.includes('reseller') || 
+                      lowerValue.includes('seller') || lowerValue.includes('generic')) {
+                    confidence *= 0.1; // Very low confidence
+                  }
+                  // Boost manufacturer names with ® or ™
+                  if (newValue.includes('®') || newValue.includes('™')) {
+                    confidence *= 2;
+                  }
+                }
+                
+                // Material-specific logic
+                if (k === 'material') {
+                  // Prefer specific materials (ROCK PLA > PLA)
+                  if (newValue.split(' ').length > 1) {
+                    confidence *= 1.5; // Composite/specific material
+                  }
+                }
+              }
+              
+              // Update if: no existing value OR new value has higher confidence
+              if (!oldValue || !dataConfidence[k] || confidence > dataConfidence[k]) {
+                accumulatedData[k] = newValue as any;
+                dataConfidence[k] = confidence;
+              }
+            });
+            
+            // Update live detection display
+            setAnalysisDetectedData({...accumulatedData});
+            
+            // Update form fields with accumulated data (respecting confidence)
+            setFilamentData(prev => {
+              const updated = {...prev};
+              console.log('[DEBUG] Progressive update - accumulatedData:', JSON.stringify(accumulatedData));
+              console.log('[DEBUG] Progressive update - prev state:', JSON.stringify(prev));
+              
+              Object.keys(accumulatedData).forEach(key => {
+                const k = key as keyof FilamentData;
+                const currentValue = prev[k];
+                const newValue = accumulatedData[k];
+                
+                console.log(`[DEBUG] Field ${k}: current="${currentValue}", new="${newValue}", confidence=${dataConfidence[k]}`);
+                
+                // Update if current is default/empty or new value is better
+                // Check if current value matches default for this field
+                const isDefault = !currentValue || currentValue === '' || currentValue === DEFAULT_DATA[k];
+                
+                if (isDefault) {
+                  console.log(`[DEBUG] Updating ${k} to "${newValue}" (current is default)`);
+                  updated[k] = newValue as any;
+                } else if (dataConfidence[k] > 2) {
+                  // High confidence override
+                  console.log(`[DEBUG] Updating ${k} to "${newValue}" (high confidence override)`);
+                  updated[k] = newValue as any;
+                } else {
+                  console.log(`[DEBUG] NOT updating ${k} - current value "${currentValue}" kept`);
+                }
+              });
+              console.log('[DEBUG] Progressive update - updated state:', JSON.stringify(updated));
+              return updated;
+            });
+          }
       );
 
-      const enrichedData = { ...data, source: data.source || 'Gemini 2.5 Flash' };
+      // Merge final JSON data with accumulated real-time data
+      // Priority: accumulated real-time data > final JSON data > defaults
+      console.log('[DEBUG] Final merge - data from JSON:', JSON.stringify(data));
+      console.log('[DEBUG] Final merge - accumulatedData:', JSON.stringify(accumulatedData));
+      
+      const enrichedData = { 
+        ...data, // Start with parsed JSON (may have defaults if parsing failed)
+        ...accumulatedData, // Override with accumulated real-time data (highest priority)
+        source: data.source || 'Gemini 2.5 Flash',
+        notes: analysisSummary ? `${data.notes || ''}${data.notes ? '\n\n' : ''}Analysis findings: ${analysisSummary}` : data.notes
+      };
+      
+      console.log('[DEBUG] Final merge - enrichedData:', JSON.stringify(enrichedData));
+      
+      // Final update with merged data
       setFilamentData(enrichedData);
       saveToHistory(enrichedData);
       setState(AppState.EDITING);
     } catch (err: any) {
-      setErrorMsg("Could not analyze image automatically. Please enter details manually.");
-      setFilamentData(DEFAULT_DATA);
+      console.log('[ERROR] Gemini analysis failed:', err.message || err);
+      console.log('[DEBUG] accumulatedData:', JSON.stringify(accumulatedData));
+      
+      // Use accumulated real-time data even if JSON parsing failed
+      const fallbackData = {
+        ...DEFAULT_DATA,
+        ...accumulatedData, // Preserve any data extracted during analysis
+      };
+      
+      // Provide specific error message based on error type
+      let errorMessage = "Could not analyze image automatically. Please enter details manually.";
+      if (err.message && err.message.includes("API Key not found")) {
+        errorMessage = "⚠️ API key not configured. Please set up VITE_GEMINI_API_KEY. See ENV_SETUP.md for instructions.";
+      } else if (Object.keys(accumulatedData).length > 0) {
+        errorMessage = "Partial analysis complete. Some fields extracted successfully.";
+      }
+      
+      setErrorMsg(errorMessage);
+      setFilamentData(fallbackData);
+      saveToHistory(fallbackData);
       setState(AppState.EDITING);
     }
   };
@@ -747,6 +871,8 @@ const App: React.FC = () => {
                 imageSrc={capturedImage}
                 logs={analysisLogs}
                 boxes={analysisBoxes}
+                onComplete={setAnalysisSummary}
+                detectedData={analysisDetectedData}
             />
         )}
 

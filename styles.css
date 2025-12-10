@@ -99,6 +99,35 @@ body {
   }
 }
 
+/* Bounding box pulse animation */
+@keyframes box-pulse {
+  0%, 100% {
+    opacity: 0.8;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.02);
+  }
+}
+
+.animate-box-pulse {
+  animation: box-pulse 2s ease-in-out infinite;
+}
+
+/* Detection ping animation */
+@keyframes detection-ping {
+  0% {
+    box-shadow: 0 0 0 0 rgba(251, 191, 36, 0.7);
+  }
+  50% {
+    box-shadow: 0 0 0 10px rgba(251, 191, 36, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(251, 191, 36, 0);
+  }
+}
+
 .animate-fade-in-up {
   animation: fade-in-up 0.4s ease-out forwards;
 }
@@ -217,4 +246,11 @@ body {
 /* Smooth transitions for all interactive elements */
 .transition-smooth {
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Analysis terminal responsive height */
+.analysis-terminal {
+  height: calc(100vh - 500px);
+  min-height: 320px;
+  max-height: 480px;
 }
