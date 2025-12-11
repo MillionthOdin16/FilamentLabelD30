@@ -1,8 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { analyzeFilamentImage } from '../../services/geminiService';
 
-// Mock import.meta.env
-vi.stubGlobal('import', { meta: { env: { VITE_GEMINI_API_KEY: 'test-key' } } });
+// Mock import.meta.env BEFORE importing the service
+Object.defineProperty(import.meta, 'env', {
+  value: { VITE_GEMINI_API_KEY: 'test-key' },
+  writable: true,
+  configurable: true
+});
+
+import { analyzeFilamentImage } from '../../services/geminiService';
 
 const { mockGenerateContentStream } = vi.hoisted(() => {
   return { mockGenerateContentStream: vi.fn() };
