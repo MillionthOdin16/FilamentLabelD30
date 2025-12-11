@@ -300,6 +300,9 @@ const BatchGenerator: React.FC<BatchGeneratorProps> = ({ history, onPrintBatch, 
                             // Determine display width based on job settings or override
                             // We use the LabelCanvas directly here with proper sizing
                             // to match single label preview quality
+                            
+                            // Performance note: Scale of 0.8 provides good quality while maintaining
+                            // reasonable performance. For very large batches (50+), consider reducing to 0.6
 
                             let widthMm = 40; // Fallback
                             let heightMm = 30;
@@ -323,16 +326,16 @@ const BatchGenerator: React.FC<BatchGeneratorProps> = ({ history, onPrintBatch, 
                                                 settings={job.settings}
                                                 widthMm={widthMm}
                                                 heightMm={heightMm}
-                                                scale={0.8} // Much larger preview for better quality
+                                                scale={0.8} // High quality preview - balances detail with performance
                                             />
                                         </div>
                                     </div>
                                     <div className="bg-gradient-to-r from-gray-800 to-gray-900 p-2 text-center">
                                         <div className="text-xs text-white font-bold truncate">
-                                            {job.label.brand}
+                                            {job.label.brand || 'Unknown'}
                                         </div>
                                         <div className="text-[10px] text-cyan-400 truncate font-semibold">
-                                            {job.label.material} • {job.label.colorName}
+                                            {job.label.material || 'Unknown'} • {job.label.colorName || 'Unknown'}
                                         </div>
                                         <div className="text-[9px] text-gray-500 mt-0.5">
                                             Label #{idx + 1}
