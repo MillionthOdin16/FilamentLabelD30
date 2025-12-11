@@ -88,7 +88,9 @@ class ErrorBoundary extends Component<Props, State> {
             </button>
 
             <button
+              type="button"
               onClick={() => window.location.reload()}
+              aria-label="Reload the page"
               className="text-gray-500 hover:text-gray-300 text-sm transition-colors"
             >
               Or reload the page

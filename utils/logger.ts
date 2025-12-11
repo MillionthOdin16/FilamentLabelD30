@@ -5,8 +5,9 @@
 
 type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 
-const isDevelopment = import.meta.env.DEV;
-const isTest = import.meta.env.MODE === 'test';
+// Helper functions to get environment state (allows for testing overrides)
+const isDevelopment = () => import.meta.env.DEV;
+const isTest = () => import.meta.env.MODE === 'test';
 
 /**
  * Logger class for structured logging
@@ -20,12 +21,12 @@ class Logger {
 
   private log(level: LogLevel, ...args: any[]) {
     // Suppress logs in test environment unless explicitly enabled
-    if (isTest && !import.meta.env.VITE_ENABLE_TEST_LOGS) {
+    if (isTest() && !import.meta.env.VITE_ENABLE_TEST_LOGS) {
       return;
     }
 
     // In production, only log warnings and errors
-    if (!isDevelopment && (level === 'debug' || level === 'info')) {
+    if (!isDevelopment() && (level === 'debug' || level === 'info')) {
       return;
     }
 

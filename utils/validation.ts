@@ -15,16 +15,26 @@ export const isValidHexColor = (hex: string): boolean => {
 
 /**
  * Normalizes a hex color to include # prefix
- * @param hex - Hex color string
+ * @param hex - Hex color string (3 or 6 characters, with or without #)
  * @returns Normalized hex string or default
  */
 export const normalizeHexColor = (hex: string): string => {
   if (!hex) return '#FFFFFF';
-  const cleaned = hex.trim().toUpperCase();
-  if (cleaned.startsWith('#')) {
-    return cleaned.length === 7 ? cleaned : '#FFFFFF';
+  const cleaned = hex.trim().toUpperCase().replace('#', '');
+  
+  // Expand 3-character hex to 6-character
+  if (cleaned.length === 3) {
+    const expanded = cleaned.split('').map(c => c + c).join('');
+    return `#${expanded}`;
   }
-  return cleaned.length === 6 ? `#${cleaned}` : '#FFFFFF';
+  
+  // Return 6-character hex
+  if (cleaned.length === 6) {
+    return `#${cleaned}`;
+  }
+  
+  // Invalid format, return default
+  return '#FFFFFF';
 };
 
 /**
@@ -49,6 +59,9 @@ export const clamp = (value: number, min: number, max: number): number => {
   return Math.max(min, Math.min(max, value));
 };
 
+// Maximum reasonable temperature range for 3D printing
+const MAX_TEMPERATURE_RANGE = 100;
+
 /**
  * Validates temperature range
  * @param minTemp - Minimum temperature
@@ -62,23 +75,49 @@ export const validateTemperatureRange = (minTemp: number, maxTemp: number): stri
   if (minTemp > maxTemp) {
     return 'Minimum temperature cannot be greater than maximum temperature';
   }
-  if (maxTemp - minTemp > 100) {
-    return 'Temperature range seems unusually large';
+  if (maxTemp - minTemp > MAX_TEMPERATURE_RANGE) {
+    return `Temperature range seems unusually large (max ${MAX_TEMPERATURE_RANGE}°C range recommended)`;
   }
   return null;
 };
 
 /**
  * Sanitizes text input to prevent XSS
+ * NOTE: This is a basic sanitization for plain text fields.
+ * For HTML content, use a library like DOMPurify.
+ * This function is intentionally conservative and may remove legitimate text.
  * @param input - Text input
  * @returns Sanitized text
  */
 export const sanitizeTextInput = (input: string): string => {
   if (!input) return '';
-  return input
-    .replace(/[<>]/g, '') // Remove angle brackets
-    .trim()
-    .slice(0, 500); // Limit length
+  
+  let sanitized = input;
+  
+  // Remove dangerous URL schemes (repeatedly to handle nested attempts)
+  const dangerousSchemes = ['javascript:', 'data:', 'vbscript:', 'file:', 'about:'];
+  let previousValue = '';
+  while (previousValue !== sanitized) {
+    previousValue = sanitized;
+    dangerousSchemes.forEach(scheme => {
+      const regex = new RegExp(scheme, 'gi');
+      sanitized = sanitized.replace(regex, '');
+    });
+  }
+  
+  // Remove HTML tags and angle brackets
+  sanitized = sanitized.replace(/[<>]/g, '');
+  
+  // Remove event handler attributes (repeatedly to handle overlapping patterns)
+  // Match patterns like: on*, ON*, On*, etc.
+  previousValue = '';
+  while (previousValue !== sanitized) {
+    previousValue = sanitized;
+    sanitized = sanitized.replace(/\bon\w+\s*=/gi, '');
+  }
+  
+  // Trim and limit length
+  return sanitized.trim().slice(0, 500);
 };
 
 /**
