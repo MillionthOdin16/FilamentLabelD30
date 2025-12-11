@@ -157,62 +157,106 @@ const AnalysisView: React.FC<AnalysisViewProps> = ({ imageSrc, logs, boxes, onCo
 
                 {/* Brand Card */}
                 <div className={`
-                    p-3 rounded-xl border transition-all duration-500
+                    p-3 rounded-xl border transition-all duration-500 relative overflow-hidden
                     ${detectedData?.brand
                         ? 'bg-gradient-to-br from-gray-900 to-gray-800 border-cyan-500/50 shadow-lg shadow-cyan-900/20 translate-y-0 opacity-100'
                         : 'bg-gray-900/30 border-gray-800/50 opacity-50'}
                 `}>
-                    <div className="text-[10px] text-gray-500 uppercase font-bold mb-1 flex items-center gap-1">
-                        <Target size={10} className={detectedData?.brand ? "text-cyan-400" : "text-gray-600"} />
-                        Brand
-                    </div>
-                    <div className={`font-bold truncate ${detectedData?.brand ? "text-white text-lg" : "text-gray-700 text-sm italic"}`}>
-                        {detectedData?.brand || "Detecting..."}
+                    {detectedData?.brand && (
+                        <div className="absolute inset-0 bg-gradient-to-r from-cyan-500/10 to-transparent animate-pulse-slow"></div>
+                    )}
+                    <div className="relative z-10">
+                        <div className="text-[10px] text-gray-500 uppercase font-bold mb-1 flex items-center gap-1">
+                            <Target size={10} className={detectedData?.brand ? "text-cyan-400" : "text-gray-600"} />
+                            Brand
+                            {detectedData?.brand && (
+                                <CheckCircle2 size={10} className="text-green-400 ml-auto animate-appear-pop" />
+                            )}
+                        </div>
+                        <div className={`font-bold truncate ${detectedData?.brand ? "text-white text-lg" : "text-gray-700 text-sm italic"}`}>
+                            {detectedData?.brand || "Detecting..."}
+                        </div>
                     </div>
                 </div>
 
                 {/* Material Card */}
                 <div className={`
-                    p-3 rounded-xl border transition-all duration-500 delay-75
+                    p-3 rounded-xl border transition-all duration-500 delay-75 relative overflow-hidden
                     ${detectedData?.material
                         ? 'bg-gradient-to-br from-gray-900 to-gray-800 border-purple-500/50 shadow-lg shadow-purple-900/20 translate-y-0 opacity-100'
                         : 'bg-gray-900/30 border-gray-800/50 opacity-50'}
                 `}>
-                    <div className="text-[10px] text-gray-500 uppercase font-bold mb-1 flex items-center gap-1">
-                        <Zap size={10} className={detectedData?.material ? "text-purple-400" : "text-gray-600"} />
-                        Material
-                    </div>
-                    <div className={`font-bold truncate ${detectedData?.material ? "text-white text-lg" : "text-gray-700 text-sm italic"}`}>
-                        {detectedData?.material || "Scanning..."}
+                    {detectedData?.material && (
+                        <div className="absolute inset-0 bg-gradient-to-r from-purple-500/10 to-transparent animate-pulse-slow"></div>
+                    )}
+                    <div className="relative z-10">
+                        <div className="text-[10px] text-gray-500 uppercase font-bold mb-1 flex items-center gap-1">
+                            <Zap size={10} className={detectedData?.material ? "text-purple-400" : "text-gray-600"} />
+                            Material
+                            {detectedData?.material && (
+                                <CheckCircle2 size={10} className="text-green-400 ml-auto animate-appear-pop" />
+                            )}
+                        </div>
+                        <div className={`font-bold truncate ${detectedData?.material ? "text-white text-lg" : "text-gray-700 text-sm italic"}`}>
+                            {detectedData?.material || "Scanning..."}
+                        </div>
                     </div>
                 </div>
 
                 {/* Color Card */}
                 <div className={`
-                    p-3 rounded-xl border transition-all duration-500 delay-100 col-span-2
+                    p-3 rounded-xl border transition-all duration-500 delay-100 col-span-2 relative overflow-hidden
                     ${detectedData?.colorName
                         ? 'bg-gradient-to-br from-gray-900 to-gray-800 border-yellow-500/50 shadow-lg shadow-yellow-900/20 translate-y-0 opacity-100'
                         : 'bg-gray-900/30 border-gray-800/50 opacity-50'}
                 `}>
-                    <div className="text-[10px] text-gray-500 uppercase font-bold mb-1 flex items-center gap-1">
-                        <Sparkles size={10} className={detectedData?.colorName ? "text-yellow-400" : "text-gray-600"} />
-                        Color & Specs
-                    </div>
-                    <div className="flex items-center justify-between">
-                         <div className={`font-bold flex items-center gap-2 ${detectedData?.colorName ? "text-white" : "text-gray-700 italic"}`}>
-                            {detectedData?.colorHex && isValidHexColor(detectedData.colorHex) && (
-                                <div className="w-4 h-4 rounded-full border border-white/20 shadow-sm" style={{backgroundColor: detectedData.colorHex}}></div>
+                    {detectedData?.colorName && (
+                        <div className="absolute inset-0 bg-gradient-to-r from-yellow-500/10 to-transparent animate-pulse-slow"></div>
+                    )}
+                    <div className="relative z-10">
+                        <div className="text-[10px] text-gray-500 uppercase font-bold mb-1 flex items-center gap-1">
+                            <Sparkles size={10} className={detectedData?.colorName ? "text-yellow-400" : "text-gray-600"} />
+                            Color & Specs
+                            {detectedData?.colorName && (
+                                <CheckCircle2 size={10} className="text-green-400 ml-auto animate-appear-pop" />
                             )}
-                            {detectedData?.colorName || "Analyzing..."}
                         </div>
+                        <div className="flex items-center justify-between">
+                             <div className={`font-bold flex items-center gap-2 ${detectedData?.colorName ? "text-white" : "text-gray-700 italic"}`}>
+                                {detectedData?.colorHex && isValidHexColor(detectedData.colorHex) && (
+                                    <div className="w-4 h-4 rounded-full border border-white/20 shadow-sm animate-appear-pop" style={{backgroundColor: detectedData.colorHex}}></div>
+                                )}
+                                {detectedData?.colorName || "Analyzing..."}
+                            </div>
 
-                        {detectedData?.minTemp && (
-                            <div className="text-xs font-mono text-gray-400 bg-black/40 px-2 py-1 rounded">
-                                {detectedData.minTemp}-{detectedData.maxTemp}°C
+                            {detectedData?.minTemp && (
+                                <div className="text-xs font-mono text-gray-400 bg-black/40 px-2 py-1 rounded animate-appear-pop">
+                                    {detectedData.minTemp}-{detectedData.maxTemp}°C
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+
+                {/* Additional Data Grid */}
+                {(detectedData?.weight || detectedData?.bedTempMin) && (
+                    <div className="col-span-2 grid grid-cols-2 gap-2 animate-fade-in-up" style={{animationDelay: '0.4s'}}>
+                        {detectedData?.weight && (
+                            <div className="p-2 rounded-lg bg-gray-900/50 border border-gray-800">
+                                <div className="text-[9px] text-gray-600 uppercase font-bold mb-0.5">Weight</div>
+                                <div className="text-sm font-bold text-cyan-400">{detectedData.weight}</div>
+                            </div>
+                        )}
+                        {detectedData?.bedTempMin && (
+                            <div className="p-2 rounded-lg bg-gray-900/50 border border-gray-800">
+                                <div className="text-[9px] text-gray-600 uppercase font-bold mb-0.5">Bed Temp</div>
+                                <div className="text-sm font-bold text-orange-400">
+                                    {detectedData.bedTempMin}-{detectedData.bedTempMax}°C
+                                </div>
                             </div>
                         )}
                     </div>
-                </div>
+                )}
 
             </div>
 
@@ -220,25 +264,53 @@ const AnalysisView: React.FC<AnalysisViewProps> = ({ imageSrc, logs, boxes, onCo
 
         {/* Logs Terminal */}
         <div className="mt-auto pt-6">
-            <div className="bg-black/80 backdrop-blur-md border border-gray-800 rounded-xl overflow-hidden shadow-2xl flex flex-col h-40 animate-fade-in-up delay-200">
+            <div className="bg-black/80 backdrop-blur-md border border-gray-800 rounded-xl overflow-hidden shadow-2xl flex flex-col animate-fade-in-up delay-200" style={{height: logs.length > 10 ? '200px' : '160px'}}>
                 <div className="flex items-center justify-between px-3 py-2 border-b border-gray-800 bg-gray-900/50">
                     <div className="flex items-center gap-2">
                         <Terminal size={12} className="text-gray-500" />
-                        <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">System Logs</span>
+                        <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Processing Stream</span>
+                        <span className="text-[9px] bg-cyan-900/30 text-cyan-400 px-1.5 py-0.5 rounded-full">{logs.length}</span>
                     </div>
-                    <button onClick={handleCopy} className="text-gray-600 hover:text-white transition-colors">
+                    <button onClick={handleCopy} className="text-gray-600 hover:text-white transition-colors p-1 hover:bg-gray-800 rounded" title="Copy logs">
                         <Copy size={12} />
                     </button>
                 </div>
 
-                <div ref={scrollRef} className="flex-1 overflow-y-auto p-3 font-mono text-[10px] space-y-1.5 custom-scrollbar">
-                    {logs.map((log, i) => (
-                        <div key={i} className={`flex items-start gap-2 ${log.color || 'text-cyan-400/80'}`}>
-                            <span className="text-gray-700 shrink-0 select-none">{'>'}</span>
-                            <span className="leading-relaxed break-words opacity-90">{log.text}</span>
-                        </div>
-                    ))}
-                    <div className="animate-pulse text-cyan-500/50">_</div>
+                <div ref={scrollRef} className="flex-1 overflow-y-auto p-3 font-mono text-[10px] space-y-1 custom-scrollbar">
+                    {logs.map((log, i) => {
+                        const isImportant = log.text.toLowerCase().includes('detected') || 
+                                          log.text.toLowerCase().includes('found') ||
+                                          log.text.toLowerCase().includes('complete');
+                        const isError = log.text.toLowerCase().includes('error') || 
+                                       log.text.toLowerCase().includes('failed');
+                        const isWarning = log.text.toLowerCase().includes('warning');
+                        
+                        return (
+                            <div 
+                                key={i} 
+                                className={`flex items-start gap-2 transition-all duration-200 hover:bg-gray-800/30 px-1 py-0.5 rounded ${
+                                    isError ? 'text-red-400' : 
+                                    isWarning ? 'text-yellow-400' :
+                                    isImportant ? 'text-green-400' :
+                                    log.color || 'text-cyan-400/80'
+                                }`}
+                            >
+                                <span className={`shrink-0 select-none ${isImportant ? 'text-green-600' : 'text-gray-700'}`}>
+                                    {isImportant ? '✓' : isError ? '✗' : isWarning ? '⚠' : '>'}
+                                </span>
+                                <span className="leading-relaxed break-words opacity-90 flex-1">
+                                    {log.text}
+                                </span>
+                                {isImportant && (
+                                    <div className="w-1 h-1 rounded-full bg-green-400 animate-pulse shrink-0 mt-1.5"></div>
+                                )}
+                            </div>
+                        );
+                    })}
+                    <div className="flex items-center gap-2 text-cyan-500/50">
+                        <span className="animate-pulse">_</span>
+                        <span className="text-[8px] text-gray-600">PROCESSING</span>
+                    </div>
                 </div>
             </div>
         </div>
