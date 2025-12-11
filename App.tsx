@@ -1236,10 +1236,11 @@ const App: React.FC = () => {
       {!showKeyboardShortcuts && (
         <button
           onClick={() => setShowKeyboardShortcuts(true)}
-          className="fixed bottom-4 right-4 z-40 p-3 bg-gray-800 hover:bg-gray-700 rounded-full shadow-lg border border-gray-700 text-gray-400 hover:text-white transition-all hover:scale-110 focus-ring animate-fade-in"
+          className="fixed bottom-4 right-4 z-40 w-12 h-12 bg-gray-800 hover:bg-gray-700 rounded-full shadow-lg border border-gray-700 text-gray-400 hover:text-white transition-all hover:scale-110 focus-ring animate-fade-in flex items-center justify-center"
           title="Keyboard Shortcuts (Press ?)"
+          aria-label="Show keyboard shortcuts"
         >
-          <Bluetooth size={20} />
+          <span className="text-xl font-bold">?</span>
         </button>
       )}
       {showKeyboardShortcuts && <KeyboardShortcuts onClose={() => setShowKeyboardShortcuts(false)} />}
