@@ -15,6 +15,7 @@ import PrinterStatusModal from './components/PrinterStatusModal';
 import BatchGenerator from './components/BatchGenerator';
 import AnalyticsDashboard from './components/AnalyticsDashboard';
 import TemplateGallery from './components/TemplateGallery';
+import KeyboardShortcuts from './components/KeyboardShortcuts';
 import { useToast } from './components/ToastProvider';
 
 const DEFAULT_DATA: FilamentData = {
@@ -69,6 +70,7 @@ const App: React.FC = () => {
   const [showSuccess, setShowSuccess] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
   const [showPrinterStatus, setShowPrinterStatus] = useState(false);
+  const [showKeyboardShortcuts, setShowKeyboardShortcuts] = useState(false);
 
   // Analysis State
   const [analysisLogs, setAnalysisLogs] = useState<{text: string, icon?: any, color?: string}[]>([]);
@@ -142,11 +144,50 @@ const App: React.FC = () => {
     // Attempt Auto-Reconnect
     tryReconnect().catch(e => console.debug("Auto-connect failed", e));
 
+    // Keyboard Shortcuts
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // ?: Show keyboard shortcuts
+      if (e.key === '?' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        e.preventDefault();
+        setShowKeyboardShortcuts(true);
+      }
+      // Ctrl/Cmd + K: Open camera
+      if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+        e.preventDefault();
+        if (state === AppState.HOME) handleStartCapture();
+      }
+      // Ctrl/Cmd + P: Print
+      if ((e.ctrlKey || e.metaKey) && e.key === 'p' && state === AppState.EDITING && printStep === 'idle' && !errorMsg) {
+        e.preventDefault();
+        handlePrint();
+      }
+      // Escape: Go home/cancel
+      if (e.key === 'Escape') {
+        if (showKeyboardShortcuts) {
+          setShowKeyboardShortcuts(false);
+        } else if (state === AppState.CAMERA || state === AppState.ANALYZING) {
+          setState(AppState.HOME);
+        } else if (showSuccess) {
+          setShowSuccess(false);
+          setPrintStep('idle');
+        }
+      }
+      // Tab shortcuts (1-4)
+      if ((e.ctrlKey || e.metaKey) && ['1', '2', '3', '4'].includes(e.key) && state === AppState.EDITING) {
+        e.preventDefault();
+        const tabs: Tab[] = ['editor', 'batch', 'templates', 'analytics'];
+        setActiveTab(tabs[parseInt(e.key) - 1]);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+
     return () => {
       removeConnectionListener(listener);
       removeStatusListener(statusListener);
+      window.removeEventListener('keydown', handleKeyDown);
     };
-  }, []);
+  }, [state, printStep, errorMsg, showSuccess, showKeyboardShortcuts]);
 
   const saveToHistory = (data: FilamentData) => {
     const newEntry: HistoryEntry = { id: Date.now().toString(), timestamp: Date.now(), data: data };
@@ -701,29 +742,30 @@ const App: React.FC = () => {
 
       {/* Tab Navigation */}
       {state !== AppState.HOME && state !== AppState.CAMERA && state !== AppState.ANALYZING && (
-        <div className="sticky top-[88px] z-30 bg-gray-950/80 backdrop-blur-md border-b border-gray-800 px-4 transition-all duration-300">
+        <div className="sticky top-[88px] z-30 bg-gray-950/80 backdrop-blur-md border-b border-gray-800 px-4 transition-all duration-300 animate-fade-in-down">
           <div className="flex gap-4 overflow-x-auto no-scrollbar max-w-xl mx-auto">
             {[
               { id: 'editor', label: 'Editor', icon: Edit3 },
               { id: 'batch', label: 'Batch', icon: Layers },
               { id: 'templates', label: 'Templates', icon: Layout },
               { id: 'analytics', label: 'Analytics', icon: BarChart3 },
-            ].map(tab => (
+            ].map((tab, index) => (
               <button
                 key={tab.id}
                 data-testid={`tab-${tab.id}`}
                 onClick={() => setActiveTab(tab.id as Tab)}
+                style={{ animationDelay: `${index * 0.05}s` }}
                 className={`
-                              flex items-center gap-2 py-3 px-1 border-b-2 transition-colors whitespace-nowrap relative
+                              flex items-center gap-2 py-3 px-1 border-b-2 transition-all whitespace-nowrap relative focus-ring stagger-item
                               ${activeTab === tab.id
-                    ? 'border-cyan-500 text-cyan-400'
-                    : 'border-transparent text-gray-500 hover:text-gray-300'}
+                    ? 'border-cyan-500 text-cyan-400 scale-105'
+                    : 'border-transparent text-gray-500 hover:text-gray-300 hover:scale-102'}
                           `}
               >
-                <tab.icon size={16} />
+                <tab.icon size={16} className={activeTab === tab.id ? 'animate-pulse-slow' : ''} />
                 <span className="text-xs font-bold uppercase tracking-wider">{tab.label}</span>
                 {tab.id === 'batch' && sessionSelectedIds.size > 0 && (
-                    <span className="absolute top-1 right-[-4px] bg-cyan-600 text-white text-[9px] w-4 h-4 flex items-center justify-center rounded-full font-bold">
+                    <span className="absolute top-1 right-[-4px] bg-cyan-600 text-white text-[9px] w-4 h-4 flex items-center justify-center rounded-full font-bold animate-spring-bounce">
                         {sessionSelectedIds.size}
                     </span>
                 )}
@@ -775,11 +817,13 @@ const App: React.FC = () => {
           <div className="flex flex-col space-y-6 mt-2 animate-fade-in">
 
             {/* Status Card */}
-            <div className="bg-gray-900 border border-gray-800 rounded-2xl p-4 flex items-center justify-between shadow-lg">
+            <div className="bg-gray-900 border border-gray-800 rounded-2xl p-4 flex items-center justify-between shadow-lg hover-lift stagger-item">
                 <div>
                     <h3 className="text-sm font-bold text-white flex items-center gap-2">
                         {isConnected ? (
-                            <span className="flex items-center gap-2 text-green-400"><CheckCircle2 size={16} /> Printer Ready</span>
+                            <span className="flex items-center gap-2 text-green-400 animate-smooth-scale-in">
+                              <CheckCircle2 size={16} className="animate-pulse-slow" /> Printer Ready
+                            </span>
                         ) : (
                             <span className="flex items-center gap-2 text-gray-400"><Printer size={16} /> Printer Disconnected</span>
                         )}
@@ -790,7 +834,7 @@ const App: React.FC = () => {
                 </div>
                 <button
                     onClick={() => { if (!isConnected) connectPrinter().catch(console.error); }}
-                    className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all ${isConnected ? 'bg-green-900/20 text-green-400 cursor-default' : 'bg-cyan-600 hover:bg-cyan-500 text-white'}`}
+                    className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all focus-ring ${isConnected ? 'bg-green-900/20 text-green-400 cursor-default' : 'bg-cyan-600 hover:bg-cyan-500 hover:shadow-lg hover:shadow-cyan-500/30 text-white active:scale-95'}`}
                 >
                     {isConnected ? 'Connected' : 'Connect'}
                 </button>
@@ -800,18 +844,18 @@ const App: React.FC = () => {
             <div className="grid grid-cols-2 gap-3">
                 <button
                   onClick={handleStartCapture}
-                  className="col-span-2 group relative flex items-center justify-between p-8 rounded-[2rem] bg-gradient-to-br from-cyan-950 via-gray-900 to-gray-950 border border-cyan-900/30 hover:border-cyan-500/50 transition-all duration-500 shadow-2xl overflow-hidden"
+                  className="col-span-2 group relative flex items-center justify-between p-8 rounded-[2rem] bg-gradient-to-br from-cyan-950 via-gray-900 to-gray-950 border border-cyan-900/30 hover:border-cyan-500/50 transition-all duration-500 shadow-2xl overflow-hidden active:scale-[0.98] focus-ring stagger-item"
                 >
                   <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,_var(--tw-gradient-stops))] from-cyan-500/10 via-transparent to-transparent opacity-50 group-hover:opacity-100 transition-opacity duration-500"></div>
                   <div className="relative z-10 flex flex-col items-start gap-2">
-                    <span className="px-3 py-1 bg-cyan-500/20 text-cyan-300 text-[10px] font-bold uppercase tracking-wider rounded-full border border-cyan-500/20 backdrop-blur-md">AI Powered</span>
+                    <span className="px-3 py-1 bg-cyan-500/20 text-cyan-300 text-[10px] font-bold uppercase tracking-wider rounded-full border border-cyan-500/20 backdrop-blur-md group-hover:scale-105 transition-transform">AI Powered</span>
                     <div>
-                      <span className="text-3xl font-black text-white tracking-tight block">Scan Label</span>
+                      <span className="text-3xl font-black text-white tracking-tight block group-hover:text-cyan-50 transition-colors">Scan Label</span>
                       <span className="text-sm text-cyan-100/60 font-medium">Identify filament via camera</span>
                     </div>
                   </div>
                   <div className="relative">
-                    <div className="absolute inset-0 bg-cyan-400 blur-xl opacity-20 animate-pulse"></div>
+                    <div className="absolute inset-0 bg-cyan-400 blur-xl opacity-20 group-hover:opacity-30 transition-opacity animate-pulse"></div>
                     <div className="w-16 h-16 bg-gradient-to-br from-cyan-500 to-blue-600 rounded-2xl flex items-center justify-center shadow-lg group-hover:scale-110 group-hover:rotate-3 transition-all duration-300">
                       <Camera size={32} className="text-white" />
                     </div>
@@ -820,21 +864,21 @@ const App: React.FC = () => {
 
                 <button
                     onClick={handleManualEntry}
-                    className="group p-5 rounded-3xl bg-gray-900/80 border border-gray-800 hover:bg-gray-800 hover:border-gray-700 transition-all duration-300 flex flex-col justify-between h-32 relative overflow-hidden"
+                    className="group p-5 rounded-3xl bg-gray-900/80 border border-gray-800 hover:bg-gray-800 hover:border-gray-700 hover:shadow-lg transition-all duration-300 flex flex-col justify-between h-32 relative overflow-hidden active:scale-95 focus-ring stagger-item"
                 >
                     <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
                         <Edit3 size={64} />
                     </div>
-                    <div className="w-10 h-10 bg-gray-800 rounded-xl flex items-center justify-center group-hover:bg-cyan-900/30 group-hover:text-cyan-400 transition-colors">
+                    <div className="w-10 h-10 bg-gray-800 rounded-xl flex items-center justify-center group-hover:bg-cyan-900/30 group-hover:text-cyan-400 transition-all group-hover:scale-110">
                         <Edit3 size={20} className="text-gray-400 group-hover:text-cyan-400" />
                     </div>
                     <div>
-                        <span className="font-bold text-base text-white block">Manual</span>
+                        <span className="font-bold text-base text-white block group-hover:text-cyan-50 transition-colors">Manual</span>
                         <span className="text-[10px] text-gray-500 uppercase tracking-wide">Type Details</span>
                     </div>
                 </button>
 
-                <div className="relative h-32">
+                <div className="relative h-32 stagger-item">
                     <input
                         type="file"
                         ref={fileInputRef}
@@ -844,16 +888,16 @@ const App: React.FC = () => {
                     />
                     <button
                         onClick={triggerFileUpload}
-                        className="w-full h-full p-5 rounded-3xl bg-gray-900/80 border border-gray-800 hover:bg-gray-800 hover:border-purple-500/30 transition-all duration-300 flex flex-col justify-between group overflow-hidden"
+                        className="w-full h-full p-5 rounded-3xl bg-gray-900/80 border border-gray-800 hover:bg-gray-800 hover:border-purple-500/30 hover:shadow-lg transition-all duration-300 flex flex-col justify-between group overflow-hidden active:scale-95 focus-ring"
                     >
                         <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity text-purple-500">
                             <ImageIcon size={64} />
                         </div>
-                        <div className="w-10 h-10 bg-gray-800 rounded-xl flex items-center justify-center group-hover:bg-purple-900/30 transition-colors">
+                        <div className="w-10 h-10 bg-gray-800 rounded-xl flex items-center justify-center group-hover:bg-purple-900/30 transition-all group-hover:scale-110">
                             <ImageIcon size={20} className="text-gray-400 group-hover:text-purple-400" />
                         </div>
                         <div>
-                            <span className="font-bold text-base text-white block">Gallery</span>
+                            <span className="font-bold text-base text-white block group-hover:text-purple-50 transition-colors">Gallery</span>
                             <span className="text-[10px] text-gray-500 uppercase tracking-wide">Upload Photo</span>
                         </div>
                     </button>
@@ -879,9 +923,19 @@ const App: React.FC = () => {
                         maxDisplay={3}
                     />
                 ) : (
-                    <div className="text-center py-8 bg-gray-900/50 rounded-2xl border border-dashed border-gray-800">
-                        <p className="text-gray-500 text-xs">No recent labels found.</p>
-                        <p className="text-gray-600 text-[10px] mt-1">Scan your first spool to get started!</p>
+                    <div className="text-center py-12 bg-gray-900/50 rounded-2xl border border-dashed border-gray-800 stagger-item animate-fade-in-up">
+                        <div className="w-16 h-16 mx-auto mb-4 bg-gray-800/50 rounded-2xl flex items-center justify-center">
+                            <Layers size={32} className="text-gray-600" />
+                        </div>
+                        <p className="text-gray-400 text-sm font-medium">No recent labels found</p>
+                        <p className="text-gray-600 text-xs mt-2 px-4">Scan or create your first filament label to get started!</p>
+                        <button
+                            onClick={handleStartCapture}
+                            className="mt-4 px-4 py-2 bg-cyan-600/20 hover:bg-cyan-600/30 text-cyan-400 rounded-lg text-xs font-bold transition-all hover:scale-105 focus-ring inline-flex items-center gap-2"
+                        >
+                            <Camera size={14} />
+                            Start Scanning
+                        </button>
                     </div>
                 )}
             </div>
@@ -1101,18 +1155,21 @@ const App: React.FC = () => {
               <button
                 onClick={handlePrint}
                 disabled={isProcessing}
-                className={`w-full py-4 rounded-xl shadow-2xl font-bold text-lg flex items-center justify-center gap-3 transition-all transform active:scale-95 glow-cyan
+                className={`w-full py-4 rounded-xl shadow-2xl font-bold text-lg flex items-center justify-center gap-3 transition-all transform active:scale-95 focus-ring animate-smooth-scale-in relative overflow-hidden group
                   ${isProcessing ? 'bg-gray-800 text-gray-500 cursor-not-allowed' :
                     (filamentData.confidence !== undefined && filamentData.confidence < 80)
-                    ? 'bg-gradient-to-r from-orange-500 to-red-600 text-white hover:from-orange-400 hover:to-red-500'
-                    : 'bg-gradient-to-r from-cyan-500 to-blue-600 text-white hover:from-cyan-400 hover:to-blue-500'}
+                    ? 'bg-gradient-to-r from-orange-500 to-red-600 text-white hover:from-orange-400 hover:to-red-500 hover:shadow-orange-500/50'
+                    : 'bg-gradient-to-r from-cyan-500 to-blue-600 text-white hover:from-cyan-400 hover:to-blue-500 hover:shadow-cyan-500/50 glow-cyan'}
                 `}
               >
-                {(filamentData.confidence !== undefined && filamentData.confidence < 80) ? <AlertTriangle size={24} /> : <Printer size={24} />}
-                {(filamentData.confidence !== undefined && filamentData.confidence < 80 && isConnected) ? 'VERIFY & PRINT' : (isConnected ? 'PRINT LABEL' : 'CONNECT & PRINT')}
-                {printSettings.copies > 1 && (
-                  <span className="bg-white/20 px-2 py-0.5 rounded-full text-sm">×{printSettings.copies}</span>
-                )}
+                <div className="absolute inset-0 bg-white/10 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                <div className="relative flex items-center gap-3">
+                  {(filamentData.confidence !== undefined && filamentData.confidence < 80) ? <AlertTriangle size={24} className="animate-pulse" /> : <Printer size={24} />}
+                  <span>{(filamentData.confidence !== undefined && filamentData.confidence < 80 && isConnected) ? 'VERIFY & PRINT' : (isConnected ? 'PRINT LABEL' : 'CONNECT & PRINT')}</span>
+                  {printSettings.copies > 1 && (
+                    <span className="bg-white/20 px-2 py-0.5 rounded-full text-sm animate-spring-bounce">×{printSettings.copies}</span>
+                  )}
+                </div>
               </button>
             )}
           </div>
@@ -1170,6 +1227,18 @@ const App: React.FC = () => {
           />
         )}
       </div>
+
+      {/* Keyboard Shortcuts Helper */}
+      {!showKeyboardShortcuts && (
+        <button
+          onClick={() => setShowKeyboardShortcuts(true)}
+          className="fixed bottom-4 right-4 z-40 p-3 bg-gray-800 hover:bg-gray-700 rounded-full shadow-lg border border-gray-700 text-gray-400 hover:text-white transition-all hover:scale-110 focus-ring animate-fade-in"
+          title="Keyboard Shortcuts (Press ?)"
+        >
+          <Bluetooth size={20} />
+        </button>
+      )}
+      {showKeyboardShortcuts && <KeyboardShortcuts onClose={() => setShowKeyboardShortcuts(false)} />}
     </div>
   );
 };
