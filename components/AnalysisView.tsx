@@ -12,6 +12,16 @@ interface AnalysisViewProps {
   detectedData?: Partial<FilamentData>;
 }
 
+// Calculate confidence based on detected fields
+const calculateConfidence = (data: Partial<FilamentData>): number => {
+  const fields = ['brand', 'material', 'colorName', 'colorHex', 'minTemp', 'maxTemp', 'weight'];
+  const detected = fields.filter(field => {
+    const value = data[field as keyof FilamentData];
+    return value !== undefined && value !== null && value !== '';
+  });
+  return Math.round((detected.length / fields.length) * 100);
+};
+
 // Helper function to validate and sanitize hex color
 function isValidHexColor(hex: string): boolean {
   return /^#[A-Fa-f0-9]{6}$/.test(hex);
@@ -36,6 +46,9 @@ const AnalysisView: React.FC<AnalysisViewProps> = ({ imageSrc, logs, boxes, onCo
   const scrollRef = useRef<HTMLDivElement>(null);
   const { success } = useToast();
   const [processingStage, setProcessingStage] = useState<string>('Initializing');
+  const [showConfidence, setShowConfidence] = useState(false);
+  
+  const confidence = calculateConfidence(detectedData || {});
 
   // Auto-scroll logs
   useEffect(() => {
@@ -47,6 +60,14 @@ const AnalysisView: React.FC<AnalysisViewProps> = ({ imageSrc, logs, boxes, onCo
   useEffect(() => {
     setProcessingStage(detectProcessingStage(logs));
   }, [logs]);
+
+  useEffect(() => {
+    // Show confidence meter after some data is detected
+    if (confidence > 0) {
+      const timer = setTimeout(() => setShowConfidence(true), 500);
+      return () => clearTimeout(timer);
+    }
+  }, [confidence]);
 
   // Pass summary on complete
   useEffect(() => {
@@ -109,25 +130,56 @@ const AnalysisView: React.FC<AnalysisViewProps> = ({ imageSrc, logs, boxes, onCo
              </div>
            </div>
 
-           <div className="flex flex-col items-end">
+           <div className="flex flex-col items-end gap-2">
              <div className="flex items-center gap-2 bg-gray-900/80 backdrop-blur border border-gray-800 px-3 py-1.5 rounded-full shadow-lg">
                {getStageIcon()}
                <span className="text-xs font-bold font-mono text-gray-200 uppercase tracking-wide">
                   {processingStage}
                </span>
              </div>
+             
+             {/* Confidence Meter */}
+             {showConfidence && confidence > 0 && (
+               <div className="bg-gray-900/80 backdrop-blur border border-gray-800 px-3 py-1.5 rounded-full shadow-lg animate-fade-in-down">
+                 <div className="flex items-center gap-2">
+                   <div className="w-16 h-1.5 bg-gray-800 rounded-full overflow-hidden">
+                     <div 
+                       className={`h-full rounded-full transition-all duration-500 ${
+                         confidence >= 80 ? 'bg-green-500' : 
+                         confidence >= 50 ? 'bg-yellow-500' : 
+                         'bg-orange-500'
+                       }`}
+                       style={{ width: `${confidence}%` }}
+                     ></div>
+                   </div>
+                   <span className={`text-[10px] font-bold font-mono ${
+                     confidence >= 80 ? 'text-green-400' : 
+                     confidence >= 50 ? 'text-yellow-400' : 
+                     'text-orange-400'
+                   }`}>
+                     {confidence}%
+                   </span>
+                 </div>
+               </div>
+             )}
            </div>
         </div>
 
         {/* Central Visualization Area */}
-        <div className="relative flex-1 flex flex-col items-center justify-start gap-6">
+        <div className="relative flex-1 flex flex-col items-center justify-start gap-4">
             
             {/* Image Preview with Bounding Boxes */}
-            <div className="relative w-48 h-48 md:w-56 md:h-56 rounded-2xl border-2 border-cyan-500/30 overflow-hidden shadow-2xl shadow-cyan-900/20 group animate-fade-in-scale">
+            <div className="relative w-full max-w-xs aspect-square rounded-2xl border-2 border-cyan-500/30 overflow-hidden shadow-2xl shadow-cyan-900/20 group animate-fade-in-scale">
                 <img src={imageSrc} className="w-full h-full object-cover" alt="Target" />
 
                 {/* Scanning Beam */}
                 <div className="absolute inset-0 bg-gradient-to-b from-transparent via-cyan-400/20 to-transparent w-full h-full animate-scan-y pointer-events-none"></div>
+
+                {/* Corner Markers */}
+                <div className="absolute top-2 left-2 w-4 h-4 border-t-2 border-l-2 border-cyan-400/60"></div>
+                <div className="absolute top-2 right-2 w-4 h-4 border-t-2 border-r-2 border-cyan-400/60"></div>
+                <div className="absolute bottom-2 left-2 w-4 h-4 border-b-2 border-l-2 border-cyan-400/60"></div>
+                <div className="absolute bottom-2 right-2 w-4 h-4 border-b-2 border-r-2 border-cyan-400/60"></div>
 
                 {/* Bounding Boxes */}
                 {boxes.map((box, i) => {
@@ -144,12 +196,19 @@ const AnalysisView: React.FC<AnalysisViewProps> = ({ imageSrc, logs, boxes, onCo
                               animationDelay: `${i * 100}ms`
                             }}
                         >
-                            <div className="absolute -top-4 left-0 text-[8px] bg-cyan-500 text-black px-1 font-bold uppercase rounded-t-sm">
+                            <div className="absolute -top-5 left-0 text-[8px] bg-cyan-500 text-black px-1.5 py-0.5 font-bold uppercase rounded shadow-lg">
                                 {box.label}
                             </div>
                         </div>
                     );
                 })}
+                
+                {/* Detection Count Badge */}
+                {boxes.length > 0 && (
+                    <div className="absolute top-3 right-3 bg-cyan-500 text-black px-2 py-1 rounded-full text-[10px] font-bold shadow-lg animate-appear-pop">
+                        {boxes.length} {boxes.length === 1 ? 'region' : 'regions'}
+                    </div>
+                )}
             </div>
 
             {/* Real-time Data Cards */}
@@ -238,23 +297,125 @@ const AnalysisView: React.FC<AnalysisViewProps> = ({ imageSrc, logs, boxes, onCo
                     </div>
                 </div>
 
-                {/* Additional Data Grid */}
-                {(detectedData?.weight || detectedData?.bedTempMin) && (
-                    <div className="col-span-2 grid grid-cols-2 gap-2 animate-fade-in-up" style={{animationDelay: '0.4s'}}>
-                        {detectedData?.weight && (
-                            <div className="p-2 rounded-lg bg-gray-900/50 border border-gray-800">
+                {/* Additional Data Grid - Expanded */}
+                <div className="col-span-2 grid grid-cols-2 gap-2 animate-fade-in-up" style={{animationDelay: '0.4s'}}>
+                    {/* Weight */}
+                    {detectedData?.weight && (
+                        <div className="p-2 rounded-lg bg-gray-900/50 border border-gray-800 relative overflow-hidden group">
+                            <div className="absolute inset-0 bg-gradient-to-r from-cyan-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                            <div className="relative z-10">
                                 <div className="text-[9px] text-gray-600 uppercase font-bold mb-0.5">Weight</div>
                                 <div className="text-sm font-bold text-cyan-400">{detectedData.weight}</div>
                             </div>
-                        )}
-                        {detectedData?.bedTempMin && (
-                            <div className="p-2 rounded-lg bg-gray-900/50 border border-gray-800">
+                        </div>
+                    )}
+                    
+                    {/* Bed Temp */}
+                    {detectedData?.bedTempMin && (
+                        <div className="p-2 rounded-lg bg-gray-900/50 border border-gray-800 relative overflow-hidden group">
+                            <div className="absolute inset-0 bg-gradient-to-r from-orange-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                            <div className="relative z-10">
                                 <div className="text-[9px] text-gray-600 uppercase font-bold mb-0.5">Bed Temp</div>
                                 <div className="text-sm font-bold text-orange-400">
                                     {detectedData.bedTempMin}-{detectedData.bedTempMax}°C
                                 </div>
                             </div>
-                        )}
+                        </div>
+                    )}
+                    
+                    {/* Hygroscopy */}
+                    {detectedData?.hygroscopy && (
+                        <div className={`p-2 rounded-lg bg-gray-900/50 border relative overflow-hidden group ${
+                            detectedData.hygroscopy === 'high' ? 'border-red-900/50' : 
+                            detectedData.hygroscopy === 'medium' ? 'border-yellow-900/50' : 
+                            'border-green-900/50'
+                        }`}>
+                            <div className={`absolute inset-0 bg-gradient-to-r to-transparent opacity-0 group-hover:opacity-100 transition-opacity ${
+                                detectedData.hygroscopy === 'high' ? 'from-red-500/5' : 
+                                detectedData.hygroscopy === 'medium' ? 'from-yellow-500/5' : 
+                                'from-green-500/5'
+                            }`}></div>
+                            <div className="relative z-10">
+                                <div className="text-[9px] text-gray-600 uppercase font-bold mb-0.5">Moisture</div>
+                                <div className={`text-sm font-bold capitalize ${
+                                    detectedData.hygroscopy === 'high' ? 'text-red-400' : 
+                                    detectedData.hygroscopy === 'medium' ? 'text-yellow-400' : 
+                                    'text-green-400'
+                                }`}>
+                                    {detectedData.hygroscopy}
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                    
+                    {/* Source */}
+                    {detectedData?.source && (
+                        <div className="p-2 rounded-lg bg-gray-900/50 border border-gray-800 relative overflow-hidden group">
+                            <div className="absolute inset-0 bg-gradient-to-r from-purple-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                            <div className="relative z-10">
+                                <div className="text-[9px] text-gray-600 uppercase font-bold mb-0.5">Source</div>
+                                <div className="text-xs font-bold text-purple-400 truncate">{detectedData.source}</div>
+                            </div>
+                        </div>
+                    )}
+                    
+                    {/* Confidence Score */}
+                    {detectedData?.confidence !== undefined && detectedData.confidence > 0 && (
+                        <div className="p-2 rounded-lg bg-gray-900/50 border border-gray-800 relative overflow-hidden group col-span-2">
+                            <div className="absolute inset-0 bg-gradient-to-r from-blue-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                            <div className="relative z-10">
+                                <div className="text-[9px] text-gray-600 uppercase font-bold mb-1 flex items-center justify-between">
+                                    <span>Detection Confidence</span>
+                                    <span className={`${
+                                        detectedData.confidence >= 80 ? 'text-green-400' : 
+                                        detectedData.confidence >= 60 ? 'text-yellow-400' : 
+                                        'text-orange-400'
+                                    }`}>{detectedData.confidence}%</span>
+                                </div>
+                                <div className="w-full h-1.5 bg-gray-800 rounded-full overflow-hidden">
+                                    <div 
+                                        className={`h-full rounded-full transition-all duration-500 ${
+                                            detectedData.confidence >= 80 ? 'bg-gradient-to-r from-green-500 to-green-400' : 
+                                            detectedData.confidence >= 60 ? 'bg-gradient-to-r from-yellow-500 to-yellow-400' : 
+                                            'bg-gradient-to-r from-orange-500 to-orange-400'
+                                        }`}
+                                        style={{ width: `${detectedData.confidence}%` }}
+                                    ></div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                    
+                    {/* Reference URL */}
+                    {detectedData?.referenceUrl && (
+                        <div className="p-2 rounded-lg bg-gray-900/50 border border-gray-800 relative overflow-hidden group col-span-2">
+                            <div className="absolute inset-0 bg-gradient-to-r from-indigo-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                            <div className="relative z-10">
+                                <div className="text-[9px] text-gray-600 uppercase font-bold mb-0.5 flex items-center gap-1">
+                                    <Globe size={10} className="text-indigo-400" />
+                                    Reference
+                                </div>
+                                <div className="text-xs text-indigo-400 truncate">{detectedData.referenceUrl}</div>
+                            </div>
+                        </div>
+                    )}
+                </div>
+                
+                {/* Notes Section */}
+                {detectedData?.notes && detectedData.notes.length > 0 && (
+                    <div className="col-span-2 animate-fade-in-up" style={{animationDelay: '0.5s'}}>
+                        <div className="p-3 rounded-lg bg-gray-900/50 border border-gray-800 relative overflow-hidden group">
+                            <div className="absolute inset-0 bg-gradient-to-r from-blue-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                            <div className="relative z-10">
+                                <div className="text-[9px] text-gray-500 uppercase font-bold mb-1.5 flex items-center gap-1">
+                                    <AlertCircle size={10} className="text-blue-400" />
+                                    Additional Info & Tips
+                                </div>
+                                <div className="text-xs text-gray-300 leading-relaxed max-h-20 overflow-y-auto custom-scrollbar">
+                                    {detectedData.notes}
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 )}
 
