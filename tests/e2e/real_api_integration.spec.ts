@@ -4,74 +4,85 @@ import { mockBluetooth } from '../fixtures/mock-bluetooth';
 import fs from 'fs';
 import path from 'path';
 
-test.describe('Real API Integration', () => {
+test.describe('Real API Integration Workflow', () => {
   test.beforeEach(async ({ page }) => {
-    // Only mock bluetooth, allow network
+    // Only mock bluetooth, allow network for Real API
     await mockBluetooth(page);
+    page.on('console', msg => console.log(`BROWSER LOG: ${msg.text()}`));
     await page.goto('/');
   });
 
-  test('Upload Real Image -> Gemini API -> Data Pre-fill', async ({ page }) => {
+  test('Full Workflow: Upload -> Analyze -> Verify Data -> Batch Preview', async ({ page }) => {
     // 1. Upload the generated image
-    // Ensure the image exists
-    const imagePath = path.join(process.cwd(), 'tests/fixtures/sample_spool.jpg');
+    const imagePath = path.join(process.cwd(), 'tests/fixtures/sample_spool.png');
     if (!fs.existsSync(imagePath)) {
         test.skip(true, 'Sample image not found');
     }
 
+    console.log("Uploading image...");
     await page.setInputFiles('input[type="file"]', {
-        name: 'sample_spool.jpg',
-        mimeType: 'image/jpeg',
+        name: 'sample_spool.png',
+        mimeType: 'image/png',
         buffer: fs.readFileSync(imagePath)
     });
 
-    // 2. Wait for Analysis
-    // This calls the real API, so it might take 5-10 seconds.
-    // "Analyzing..." should appear.
-    try {
-        await expect(page.getByText(/Analyzing|Scanning/)).toBeVisible({ timeout: 10000 });
-    } catch(e) {
-        console.log("Analyzing view appeared/disappeared quickly");
+    // 2. Wait for Analysis to complete and "Customize" screen to appear
+    console.log("Waiting for analysis...");
+    await expect(page.getByText('Customize')).toBeVisible({ timeout: 60000 });
+
+    // Debugging: Log Source and Notes
+    const sourceElement = page.locator('a[href] span, div.flex.items-center.gap-1 span').first();
+    if (await sourceElement.isVisible()) {
+        console.log(`Detected Source: "${await sourceElement.textContent()}"`);
     }
 
-    // 3. Verify Data
-    // We expect the API to read "OVERTURE", "PLA", "Red", "200", "220".
-    // Increase timeout for API latency
-    await page.waitForTimeout(5000);
+    // 3. Verify Data Population (Inputs)
+    console.log("Verifying input fields...");
 
-    await expect(page.getByText('Customize')).toBeVisible({ timeout: 30000 });
+    // Brand
+    const brandInput = page.locator('label:has-text("Brand") + input');
+    await expect(brandInput).toBeVisible();
+    const brandValue = await brandInput.inputValue();
+    console.log(`Detected Brand: "${brandValue}"`);
 
-    // Check specific values
-    const brandInput = page.locator('input[value="OVERTURE"]');
-    const materialInput = page.locator('input[value="PLA"]');
-    // Note: Brand might be "OVERTURE" or "Overture". Regex matching is safer if value locator fails.
-    // But let's try value first.
+    if (brandValue === 'GENERIC') {
+        // Log notes to see error
+        const notesInput = page.locator('textarea');
+        console.log(`Notes: "${await notesInput.inputValue()}"`);
+    }
 
-    // Check if ANY brand field contains Overture
-    const brandValue = await page.locator('label:has-text("Brand") + input').inputValue();
     expect(brandValue.toUpperCase()).toContain('OVERTURE');
 
-    const materialValue = await page.locator('label:has-text("Material") + input').inputValue();
+    // Ensure default "GENERIC" is NOT present in the value
+    expect(brandValue.toUpperCase()).not.toBe('GENERIC');
+
+    // Material
+    const materialInput = page.locator('label:has-text("Material") + input');
+    const materialValue = await materialInput.inputValue();
+    console.log(`Detected Material: "${materialValue}"`);
     expect(materialValue.toUpperCase()).toContain('PLA');
 
-    // Check Temps
-    // Nozzle Min should be 200
-    // The slider component might not expose the value directly in a simple input,
-    // but the inputs next to it (if any) or the state.
-    // In `LabelEditor.tsx`:
-    /*
-             <SmartSlider
-                label="Nozzle Min"
-                value={data.minTemp}
-                ...
-             />
-    */
-    // SmartSlider usually has an input.
-    // Locator: label:has-text("Nozzle Min") + div input
+    // Temperatures
     const nozzleMin = await page.locator('label:has-text("Nozzle Min") + div input').inputValue();
+    console.log(`Detected Nozzle Min: ${nozzleMin}`);
     expect(nozzleMin).toBe('200');
 
     const nozzleMax = await page.locator('label:has-text("Nozzle Max") + div input').inputValue();
+    console.log(`Detected Nozzle Max: ${nozzleMax}`);
     expect(nozzleMax).toBe('220');
+
+    // 4. Verify Label Preview (Indirectly via Batch/Thumbnail)
+    console.log("Adding to Batch...");
+    await page.getByRole('button', { name: 'Add to Batch' }).click();
+
+    console.log("Navigating to Batch tab...");
+    await page.getByTestId('tab-batch').click();
+
+    // 5. Verify Batch Item
+    console.log("Verifying batch item...");
+    await expect(page.getByText('OVERTURE').first()).toBeVisible();
+    await expect(page.getByText('PLA', { exact: false }).first()).toBeVisible();
+
+    console.log("Full workflow verification complete.");
   });
 });
