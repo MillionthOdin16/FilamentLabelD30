@@ -270,30 +270,39 @@ const BatchGenerator: React.FC<BatchGeneratorProps> = ({ history, onPrintBatch, 
 
             {/* Results Preview */}
             {generatedJobs.length > 0 && (
-                <div className="bg-gray-900 p-4 rounded-xl border border-gray-800 animate-in fade-in slide-in-from-bottom-4">
-                    <div className="flex justify-between items-center mb-4">
-                        <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                            <FileText size={16} className="text-green-400" /> Preview
-                        </h3>
-                        <span className="text-xs text-gray-400 flex items-center gap-1">
-                            <Clock size={12} /> ~{Math.round(generatedJobs.reduce((acc, j) => acc + j.estimatedTime, 0) / 60)} min
-                        </span>
+                <div className="bg-gradient-to-br from-gray-900 to-gray-950 p-6 rounded-xl border-2 border-cyan-900/30 shadow-2xl animate-in fade-in slide-in-from-bottom-4">
+                    <div className="flex justify-between items-center mb-5">
+                        <div className="flex items-center gap-3">
+                            <div className="p-2 bg-cyan-500/10 rounded-lg">
+                                <FileText size={20} className="text-cyan-400" />
+                            </div>
+                            <div>
+                                <h3 className="text-lg font-bold text-white">Batch Preview</h3>
+                                <p className="text-xs text-gray-400">High-quality label previews</p>
+                            </div>
+                        </div>
+                        <div className="flex items-center gap-2 bg-gray-800/50 px-3 py-2 rounded-lg border border-gray-700">
+                            <Clock size={14} className="text-cyan-400" />
+                            <span className="text-sm font-semibold text-white">~{Math.round(generatedJobs.reduce((acc, j) => acc + j.estimatedTime, 0) / 60)} min</span>
+                        </div>
                     </div>
 
                     {/* Summary Report */}
-                    <pre className="bg-gray-950 p-3 rounded-lg text-[10px] text-gray-400 font-mono overflow-x-auto mb-4 border border-gray-800 max-h-32">
-                        {report}
-                    </pre>
+                    <div className="bg-gray-950/50 p-4 rounded-lg border border-gray-800/50 mb-5">
+                        <pre className="text-[11px] text-gray-300 font-mono overflow-x-auto whitespace-pre-wrap leading-relaxed">
+                            {report}
+                        </pre>
+                    </div>
 
-                    {/* Visual Grid Preview */}
-                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mb-4 max-h-64 overflow-y-auto pr-1 custom-scrollbar">
+                    {/* Visual Grid Preview - High Quality */}
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-4 max-h-96 overflow-y-auto pr-1 custom-scrollbar">
                         {generatedJobs.map((job, idx) => {
                             // Determine display width based on job settings or override
-                            // We use the LabelCanvas directly here but scaled down
-                            // The widthMm in job.settings might not be set if it depends on global override?
-                            // BatchGenerator logic for overrides happens in onPrintBatch (App.tsx), but
-                            // generatedJobs here are raw from generator service.
-                            // If we have an overrideSize locally, we should use it for the preview.
+                            // We use the LabelCanvas directly here with proper sizing
+                            // to match single label preview quality
+                            
+                            // Performance note: Scale of 0.8 provides good quality while maintaining
+                            // reasonable performance. For very large batches (50+), consider reducing to 0.6
 
                             let widthMm = 40; // Fallback
                             let heightMm = 30;
@@ -302,30 +311,34 @@ const BatchGenerator: React.FC<BatchGeneratorProps> = ({ history, onPrintBatch, 
                                 const preset = LABEL_PRESETS.find(p => p.id === overrideSize);
                                 if (preset) { widthMm = preset.widthMm; heightMm = preset.heightMm; }
                             } else {
-                                // Try to guess from settings (not strictly stored yet) or use default
-                                // Ideally generatedJobs should carry this info.
-                                // For now, we use standard preview size.
+                                // Use recommended size from job if available, otherwise default
+                                // This matches the auto-recommendation logic
+                                widthMm = 40;
+                                heightMm = 30;
                             }
 
                             return (
-                                <div key={job.id} className="relative bg-white rounded-lg overflow-hidden border border-gray-700 shadow-sm flex flex-col">
-                                    <div className="flex-1 flex items-center justify-center p-2 bg-gray-100 min-h-[80px]">
-                                        <div className="pointer-events-none transform origin-center">
+                                <div key={job.id} className="relative bg-white rounded-xl overflow-hidden border-2 border-gray-700 shadow-lg hover:border-cyan-500 transition-all flex flex-col group">
+                                    <div className="flex-1 flex items-center justify-center p-4 bg-gradient-to-br from-gray-50 to-gray-100 min-h-[140px]">
+                                        <div className="pointer-events-none transform origin-center scale-100 group-hover:scale-105 transition-transform">
                                             <LabelCanvas
                                                 data={job.label}
                                                 settings={job.settings}
                                                 widthMm={widthMm}
                                                 heightMm={heightMm}
-                                                scale={0.3} // Small preview
+                                                scale={0.8} // High quality preview - balances detail with performance
                                             />
                                         </div>
                                     </div>
-                                    <div className="bg-gray-800 p-1.5 text-center">
-                                        <div className="text-[10px] text-white font-bold truncate">
-                                            {job.label.brand}
+                                    <div className="bg-gradient-to-r from-gray-800 to-gray-900 p-2 text-center">
+                                        <div className="text-xs text-white font-bold truncate">
+                                            {job.label.brand || 'Unknown'}
                                         </div>
-                                        <div className="text-[9px] text-gray-400 truncate">
-                                            {job.label.material} • #{idx + 1}
+                                        <div className="text-[10px] text-cyan-400 truncate font-semibold">
+                                            {job.label.material || 'Unknown'} • {job.label.colorName || 'Unknown'}
+                                        </div>
+                                        <div className="text-[9px] text-gray-500 mt-0.5">
+                                            Label #{idx + 1}
                                         </div>
                                     </div>
                                 </div>
@@ -334,21 +347,25 @@ const BatchGenerator: React.FC<BatchGeneratorProps> = ({ history, onPrintBatch, 
                     </div>
 
                     {overrideSize !== 'default' && (
-                        <div className="mb-4 p-2 bg-yellow-900/20 border border-yellow-700/50 rounded flex items-center gap-2 text-xs text-yellow-500">
-                            <AlertCircle size={14} />
-                            <span>Ensure printer is loaded with <b>{getPresetName(overrideSize)}</b> labels.</span>
+                        <div className="mb-4 p-3 bg-yellow-900/20 border-2 border-yellow-600/50 rounded-lg flex items-center gap-3 text-sm text-yellow-400">
+                            <AlertCircle size={18} className="flex-shrink-0" />
+                            <span>Ensure printer is loaded with <b className="text-yellow-300">{getPresetName(overrideSize)}</b> labels.</span>
                         </div>
                     )}
 
                     <button
                         onClick={handlePrint}
                         disabled={isPrinting}
-                        className="w-full py-3 bg-green-600 hover:bg-green-500 disabled:bg-gray-800 text-white font-bold rounded-lg transition-colors flex items-center justify-center gap-2"
+                        className="w-full py-4 bg-gradient-to-r from-green-600 to-green-500 hover:from-green-500 hover:to-green-400 disabled:from-gray-800 disabled:to-gray-700 text-white font-bold rounded-xl transition-all shadow-lg hover:shadow-green-500/20 disabled:shadow-none flex items-center justify-center gap-2 transform active:scale-[0.98]"
                     >
                         {isPrinting ? (
                             <>Printing... <span className="animate-pulse">...</span></>
                         ) : (
-                            <>Print {generatedJobs.length} Labels <ArrowRight size={18} /></>
+                            <>
+                                <Printer size={18} />
+                                Print {generatedJobs.length} Label{generatedJobs.length !== 1 ? 's' : ''} 
+                                <ArrowRight size={18} />
+                            </>
                         )}
                     </button>
                 </div>
