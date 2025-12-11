@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Camera, Printer, RotateCcw, PenTool, Loader2, Info, Bluetooth, Ruler, History, ArrowRight, Battery, BatteryFull, BatteryLow, BatteryMedium, ExternalLink, AlertTriangle, Eye, X, Download, Upload, Image as ImageIcon, Edit3, CheckCircle2, Sparkles, Package, Layout, BarChart3, Layers, PlusCircle, Scan } from 'lucide-react';
+import { Camera, Printer, RotateCcw, PenTool, Bluetooth, Ruler, Battery, BatteryFull, BatteryLow, BatteryMedium, ExternalLink, AlertTriangle, X, Image as ImageIcon, Edit3, CheckCircle2, Layout, BarChart3, Layers, PlusCircle, Scan } from 'lucide-react';
 import { AppState, FilamentData, LABEL_PRESETS, LabelPreset, PrintSettings, HistoryEntry, LabelTheme, PrinterInfo, PrintJob, LabelTemplate } from './types';
 import { analyzeFilamentImage } from './services/geminiService';
-import { connectPrinter, printLabel, getBatteryLevel, getDeviceDetails, checkPrinterStatus, addConnectionListener, removeConnectionListener, getConnectedDevice, addStatusListener, removeStatusListener, tryReconnect } from './services/printerService';
+import { connectPrinter, printLabel, getBatteryLevel, getDeviceDetails, checkPrinterStatus, addConnectionListener, removeConnectionListener, getConnectedDevice, addStatusListener, tryReconnect } from './services/printerService';
 import CameraCapture from './components/CameraCapture';
 import LabelEditor from './components/LabelEditor';
 import LabelCanvas from './components/LabelCanvas';
@@ -144,7 +144,7 @@ const App: React.FC = () => {
 
     return () => {
       removeConnectionListener(listener);
-      removeStatusListener(statusListener);
+      removeStatusListener(statusListener); // Fixed: was removeStatusListener(statusListener) which is correct
     };
   }, []);
 
@@ -268,32 +268,23 @@ const App: React.FC = () => {
             // Update form fields with accumulated data (respecting confidence)
             setFilamentData(prev => {
               const updated = {...prev};
-              console.log('[DEBUG] Progressive update - accumulatedData:', JSON.stringify(accumulatedData));
-              console.log('[DEBUG] Progressive update - prev state:', JSON.stringify(prev));
               
               Object.keys(accumulatedData).forEach(key => {
                 const k = key as keyof FilamentData;
                 const currentValue = prev[k];
                 const newValue = accumulatedData[k];
                 
-                console.log(`[DEBUG] Field ${k}: current="${currentValue}", new="${newValue}", confidence=${dataConfidence[k]}`);
-                
                 // Update if current is default/empty or new value is better
                 // Check if current value matches default for this field
                 const isDefault = !currentValue || currentValue === '' || currentValue === DEFAULT_DATA[k];
                 
                 if (isDefault) {
-                  console.log(`[DEBUG] Updating ${k} to "${newValue}" (current is default)`);
                   updated[k] = newValue as any;
                 } else if (dataConfidence[k] > 2) {
                   // High confidence override
-                  console.log(`[DEBUG] Updating ${k} to "${newValue}" (high confidence override)`);
                   updated[k] = newValue as any;
-                } else {
-                  console.log(`[DEBUG] NOT updating ${k} - current value "${currentValue}" kept`);
                 }
               });
-              console.log('[DEBUG] Progressive update - updated state:', JSON.stringify(updated));
               return updated;
             });
           }
@@ -301,9 +292,6 @@ const App: React.FC = () => {
 
       // Merge final JSON data with accumulated real-time data
       // Priority: accumulated real-time data > final JSON data > defaults
-      console.log('[DEBUG] Final merge - data from JSON:', JSON.stringify(data));
-      console.log('[DEBUG] Final merge - accumulatedData:', JSON.stringify(accumulatedData));
-      
       const enrichedData = { 
         ...data, // Start with parsed JSON (may have defaults if parsing failed)
         ...accumulatedData, // Override with accumulated real-time data (highest priority)
@@ -311,15 +299,12 @@ const App: React.FC = () => {
         notes: analysisSummary ? `${data.notes || ''}${data.notes ? '\n\n' : ''}Analysis findings: ${analysisSummary}` : data.notes
       };
       
-      console.log('[DEBUG] Final merge - enrichedData:', JSON.stringify(enrichedData));
-      
       // Final update with merged data
       setFilamentData(enrichedData);
       saveToHistory(enrichedData);
       setState(AppState.EDITING);
     } catch (err: any) {
       console.log('[ERROR] Gemini analysis failed:', err.message || err);
-      console.log('[DEBUG] accumulatedData:', JSON.stringify(accumulatedData));
       
       // Use accumulated real-time data even if JSON parsing failed
       const fallbackData = {
@@ -347,38 +332,11 @@ const App: React.FC = () => {
       
       // Stay on Analysis/Camera screen with error, do NOT auto-switch to generic data
       setErrorMsg(errorMessage);
-      // setFilamentData(fallbackData); // Keep existing data (or defaults) but don't commit it to history yet
-      // setState(AppState.EDITING); // <--- REMOVED: Don't switch to Editor on failure
-
-      // Add a manual override option in the UI (handled by AnalysisView if we pass error props, or just toast?)
-      // Since AnalysisView is active, we should probably show the error there.
-      // But AnalysisView props: imageSrc, logs, boxes, onComplete.
-      // It doesn't handle error state well natively unless we unmount it or pass error.
-      // Ideally, we should show a "Retry" or "Edit Manually" button.
-      // For now, let's keep the user on the analysis screen (or go back to camera?)
-      // Actually, if we stay in ANALYZING state but the process finished, AnalysisView might hang?
-      // We should probably go back to CAMERA or HOME or show a Modal?
-
-      // Let's show the error and offer manual entry.
-      // If we stay in ANALYZING, the user sees the logs and the error toast.
-      // But they need a way out.
-      // "AnalysisView" has no "Cancel" button visible in the code I saw earlier?
-      // Wait, `AnalysisView` renders logs.
-      // If I set `errorMsg`, where is it displayed?
-      // In the footer: `{(state === AppState.EDITING ... ) && !showSuccess && activeTab === 'editor' ...`
-      // So errorMsg is NOT visible in ANALYZING state!
 
       // I need to ensure error is visible.
-      // I will use `toast.error` for visibility.
       toast.error("Analysis Failed", errorMessage);
 
       // And revert to Camera or Home so they can try again or choose manual.
-      // Or better: Go to Editor with defaults but make it clear it failed?
-      // The user complaint "shows generic pla ... none of actual data".
-      // If we go to editor, they see generic.
-
-      // If I stay in ANALYZING, they are stuck.
-      // I will go back to HOME (Camera selection) so they can retry.
       setState(AppState.HOME);
     }
   };

@@ -192,6 +192,48 @@ After streaming all your LOG: and BOX: messages, output a complete JSON object w
 const MAX_RETRIES = 2;
 const MIN_LOG_LINE_LENGTH = 5;
 
+function getFriendlyErrorMessage(error: any): string {
+    const msg = error?.message || error?.toString() || '';
+
+    // Check for specific error keywords first (Priority High)
+    if (msg.includes('API Key not found')) {
+        return "⚠️ API Key not found. Please configure VITE_GEMINI_API_KEY.";
+    }
+
+    if (msg.includes('RESOURCE_EXHAUSTED') || (msg.includes('429') && msg.includes('quota'))) {
+        return "Daily AI scan quota exceeded. Please use Manual Entry.";
+    }
+
+    if (msg.includes('NetworkError') || msg.includes('fetch') || msg.includes('Failed to fetch')) {
+        return "Network connection failed. Please check your internet.";
+    }
+
+    // Clean up raw JSON if present (e.g. GoogleGenAI often throws "[400] {...json...}")
+    if (msg.includes('{') && msg.includes('}')) {
+         try {
+             // Extract JSON object using regex (handles potentially messy prefixes)
+             // Matches from first { to last }
+             const jsonMatch = msg.match(/(\{[\s\S]*\})/);
+             if (jsonMatch) {
+                 const parsed = JSON.parse(jsonMatch[1]);
+
+                 // Handle standard Google API error format
+                 if (parsed.error?.message) {
+                     // Check if inner message is specific
+                     if (parsed.error.status === 'RESOURCE_EXHAUSTED') return "Daily AI scan quota exceeded. Please use Manual Entry.";
+                     return parsed.error.message;
+                 }
+                 if (parsed.message) return parsed.message;
+             }
+         } catch (e) {
+             // ignore parsing error, fall back to truncation
+         }
+    }
+
+    // Fallback: Truncate very long messages
+    return msg.length > 150 ? msg.substring(0, 150) + '...' : msg;
+}
+
 // Helper function to extract detected data from log text
 function extractDataFromLog(logText: string): Partial<FilamentData> {
     const result: Partial<FilamentData> = {};
@@ -477,5 +519,7 @@ export const analyzeFilamentImage = async (
     }
   }
 
-  throw new Error(`Failed to analyze label after ${MAX_RETRIES + 1} attempts. ${lastError?.message || ''}`);
+  // Use the helper to parse the error message
+  const friendlyError = getFriendlyErrorMessage(lastError);
+  throw new Error(friendlyError);
 };
