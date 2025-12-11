@@ -14,7 +14,7 @@ test.describe('Deep UI Audit', () => {
 
   test('Label Editor: Input Validation & Sliders', async ({ page }) => {
     // Navigate to Editor
-    await page.getByText('Manual Entry').click();
+    await page.getByText('Manual').click();
     await expect(page.getByText('Customize')).toBeVisible();
 
     // 1. Text Input Limits (Visual Check largely, but ensuring no crash)
@@ -23,7 +23,7 @@ test.describe('Deep UI Audit', () => {
     await expect(brandInput).toHaveValue('A'.repeat(100));
 
     // 2. Color Picker & Presets
-    const colorInput = page.locator('input[placeholder="Color"]');
+    const colorInput = page.locator('input[placeholder="e.g. Galaxy Black"]');
     await colorInput.fill('Neon Pink');
 
     // Click a preset color (Red)
@@ -88,7 +88,7 @@ test.describe('Deep UI Audit', () => {
 
   test('Batch Operations: Add, Clear, Size Override', async ({ page }) => {
     // 1. Add item to batch
-    await page.getByText('Manual Entry').click();
+    await page.getByText('Manual').click();
 
     // Fill in some unique data to be sure
     await page.locator('input[type="text"]').first().fill('TEST_BRAND');
@@ -172,7 +172,7 @@ test.describe('Deep UI Audit', () => {
     // Navigate to Analytics
     // First, ensure we are in a state where tabs are visible
     // Tabs are visible if state !== AppState.HOME
-    await page.getByText('Manual Entry').click();
+    await page.getByText('Manual').click();
     await expect(page.getByText('Customize')).toBeVisible();
 
     await page.getByTestId('tab-analytics').click();

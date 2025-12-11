@@ -836,29 +836,41 @@ const App: React.FC = () => {
             <div className="grid grid-cols-2 gap-3">
                 <button
                   onClick={handleStartCapture}
-                  className="col-span-2 group relative flex items-center justify-between p-6 rounded-3xl bg-gradient-to-br from-gray-900 to-gray-800 border border-gray-800 hover:border-cyan-500/50 transition-all duration-300 shadow-xl overflow-hidden"
+                  className="col-span-2 group relative flex items-center justify-between p-8 rounded-[2rem] bg-gradient-to-br from-cyan-950 via-gray-900 to-gray-950 border border-cyan-900/30 hover:border-cyan-500/50 transition-all duration-500 shadow-2xl overflow-hidden"
                 >
-                  <div className="absolute inset-0 bg-cyan-500/5 group-hover:bg-cyan-500/10 transition-all"></div>
-                  <div className="relative z-10 flex flex-col items-start gap-1">
-                    <span className="text-2xl font-black text-white">Scan Label</span>
-                    <span className="text-xs text-gray-400">Identify filament via camera</span>
+                  <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,_var(--tw-gradient-stops))] from-cyan-500/10 via-transparent to-transparent opacity-50 group-hover:opacity-100 transition-opacity duration-500"></div>
+                  <div className="relative z-10 flex flex-col items-start gap-2">
+                    <span className="px-3 py-1 bg-cyan-500/20 text-cyan-300 text-[10px] font-bold uppercase tracking-wider rounded-full border border-cyan-500/20 backdrop-blur-md">AI Powered</span>
+                    <div>
+                      <span className="text-3xl font-black text-white tracking-tight block">Scan Label</span>
+                      <span className="text-sm text-cyan-100/60 font-medium">Identify filament via camera</span>
+                    </div>
                   </div>
-                  <div className="w-12 h-12 bg-cyan-500/20 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform">
-                    <Camera size={24} className="text-cyan-400" />
+                  <div className="relative">
+                    <div className="absolute inset-0 bg-cyan-400 blur-xl opacity-20 animate-pulse"></div>
+                    <div className="w-16 h-16 bg-gradient-to-br from-cyan-500 to-blue-600 rounded-2xl flex items-center justify-center shadow-lg group-hover:scale-110 group-hover:rotate-3 transition-all duration-300">
+                      <Camera size={32} className="text-white" />
+                    </div>
                   </div>
                 </button>
 
                 <button
                     onClick={handleManualEntry}
-                    className="p-4 rounded-2xl bg-gray-900 border border-gray-800 hover:bg-gray-800 transition-all flex flex-col gap-2 items-start"
+                    className="group p-5 rounded-3xl bg-gray-900/80 border border-gray-800 hover:bg-gray-800 hover:border-gray-700 transition-all duration-300 flex flex-col justify-between h-32 relative overflow-hidden"
                 >
-                    <div className="w-8 h-8 bg-gray-800 rounded-lg flex items-center justify-center">
-                        <Edit3 size={16} className="text-cyan-400" />
+                    <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+                        <Edit3 size={64} />
                     </div>
-                    <span className="font-bold text-sm text-gray-200">Manual Entry</span>
+                    <div className="w-10 h-10 bg-gray-800 rounded-xl flex items-center justify-center group-hover:bg-cyan-900/30 group-hover:text-cyan-400 transition-colors">
+                        <Edit3 size={20} className="text-gray-400 group-hover:text-cyan-400" />
+                    </div>
+                    <div>
+                        <span className="font-bold text-base text-white block">Manual</span>
+                        <span className="text-[10px] text-gray-500 uppercase tracking-wide">Type Details</span>
+                    </div>
                 </button>
 
-                <div className="relative">
+                <div className="relative h-32">
                     <input
                         type="file"
                         ref={fileInputRef}
@@ -868,12 +880,18 @@ const App: React.FC = () => {
                     />
                     <button
                         onClick={triggerFileUpload}
-                        className="w-full h-full p-4 rounded-2xl bg-gray-900 border border-gray-800 hover:bg-gray-800 transition-all flex flex-col gap-2 items-start"
+                        className="w-full h-full p-5 rounded-3xl bg-gray-900/80 border border-gray-800 hover:bg-gray-800 hover:border-purple-500/30 transition-all duration-300 flex flex-col justify-between group overflow-hidden"
                     >
-                        <div className="w-8 h-8 bg-gray-800 rounded-lg flex items-center justify-center">
-                            <ImageIcon size={16} className="text-purple-400" />
+                        <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity text-purple-500">
+                            <ImageIcon size={64} />
                         </div>
-                        <span className="font-bold text-sm text-gray-200">From Gallery</span>
+                        <div className="w-10 h-10 bg-gray-800 rounded-xl flex items-center justify-center group-hover:bg-purple-900/30 transition-colors">
+                            <ImageIcon size={20} className="text-gray-400 group-hover:text-purple-400" />
+                        </div>
+                        <div>
+                            <span className="font-bold text-base text-white block">Gallery</span>
+                            <span className="text-[10px] text-gray-500 uppercase tracking-wide">Upload Photo</span>
+                        </div>
                     </button>
                 </div>
             </div>

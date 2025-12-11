@@ -254,3 +254,9 @@ body {
   min-height: 320px;
   max-height: 480px;
 }
+
+/* Gradient Masks */
+.mask-gradient-r {
+  -webkit-mask-image: linear-gradient(to right, black 85%, transparent 100%);
+  mask-image: linear-gradient(to right, black 85%, transparent 100%);
+}
