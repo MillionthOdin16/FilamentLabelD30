@@ -154,9 +154,15 @@ const FilamentLibrary: React.FC<FilamentLibraryProps> = ({
 
             {/* Delete Button */}
             {onDelete && (
-              <button 
-                onClick={(e) => { e.stopPropagation(); onDelete(entry.id); }}
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (window.confirm(`Delete ${entry.data.brand} ${entry.data.material} (${entry.data.colorName})?\n\nThis cannot be undone.`)) {
+                    onDelete(entry.id);
+                  }
+                }}
                 className="p-3 text-gray-700 hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100"
+                title="Delete label"
               >
                 <Trash2 size={14} />
               </button>

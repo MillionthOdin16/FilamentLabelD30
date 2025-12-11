@@ -57,6 +57,18 @@ const App: React.FC = () => {
   const [printSettings, setPrintSettings] = useState<PrintSettings>(DEFAULT_SETTINGS);
   const [selectedLabel, setSelectedLabel] = useState<LabelPreset>(LABEL_PRESETS[0]); // Default to 12x40mm (Index 0)
 
+  // Helper to update and persist settings
+  const updatePrintSettings = (newSettings: PrintSettings) => {
+    setPrintSettings(newSettings);
+    localStorage.setItem('filament_settings', JSON.stringify(newSettings));
+  };
+
+  // Helper to update and persist label selection
+  const updateSelectedLabel = (newLabel: LabelPreset) => {
+    setSelectedLabel(newLabel);
+    localStorage.setItem('filament_label_id', newLabel.id);
+  };
+
   const [previewCanvas, setPreviewCanvas] = useState<HTMLCanvasElement | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -67,7 +79,11 @@ const App: React.FC = () => {
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [isIframe, setIsIframe] = useState(false);
-  const [showIframeWarning, setShowIframeWarning] = useState(true);
+  const [showIframeWarning, setShowIframeWarning] = useState(() => {
+    // Load iframe warning dismissal state
+    const dismissed = localStorage.getItem('iframe_warning_dismissed');
+    return dismissed !== 'true';
+  });
   const [showSuccess, setShowSuccess] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
   const [showPrinterStatus, setShowPrinterStatus] = useState(false);
@@ -101,14 +117,23 @@ const App: React.FC = () => {
     // Load Settings
     const savedSettings = localStorage.getItem('filament_settings');
     if (savedSettings) {
-      try { setPrintSettings(prev => ({ ...prev, ...JSON.parse(savedSettings) })); } catch (e) { console.error("Settings error", e); }
+      try {
+        const parsed = JSON.parse(savedSettings);
+        setPrintSettings(prev => ({ ...prev, ...parsed }));
+        console.log('Loaded saved settings:', parsed);
+      } catch (e) {
+        console.error("Settings error", e);
+      }
     }
 
-    // Load Label
+    // Load Label - Fixed to properly restore selection
     const savedLabelId = localStorage.getItem('filament_label_id');
     if (savedLabelId) {
        const preset = LABEL_PRESETS.find(p => p.id === savedLabelId);
-       if (preset) setSelectedLabel(preset);
+       if (preset) {
+         setSelectedLabel(preset);
+         console.log('Loaded saved label:', preset.name);
+       }
     }
 
     // Check environment
@@ -362,27 +387,34 @@ const App: React.FC = () => {
       if (err.message && err.message.includes("API Key not found")) {
         errorMessage = "⚠️ API key not configured. Check VITE_GEMINI_API_KEY.";
       } else if (Object.keys(accumulatedData).length > 0) {
-        // If we have some data, treating it as partial success might be better,
-        // but if the error was catastrophic (network), we should warn.
+        // If we have some data, treating it as partial success
         errorMessage = "Partial analysis complete. Some fields extracted.";
-        // For partial success, we can proceed to editor
+        // For partial success, proceed to editor with partial data
         setErrorMsg(errorMessage);
         setFilamentData(fallbackData);
         saveToHistory(fallbackData);
+        toast.success("Partial Data Extracted", "Review and edit the detected fields");
         setState(AppState.EDITING);
         return;
       } else {
         errorMessage = `Analysis Failed: ${err.message || 'Unknown Error'}`;
       }
-      
-      // Stay on Analysis/Camera screen with error, do NOT auto-switch to generic data
+
+      // For complete failure, still allow editing with default data
+      // This gives users the option to manually enter data without losing the workflow
+      console.warn("Analysis failed, allowing manual entry with defaults");
       setErrorMsg(errorMessage);
+      setFilamentData({
+        ...DEFAULT_DATA,
+        source: 'Manual Entry (Analysis Failed)'
+      });
 
-      // I need to ensure error is visible.
-      toast.error("Analysis Failed", errorMessage);
+      // Show toast with retry option
+      toast.error("Analysis Failed", `${errorMessage} - You can enter data manually or go back to retry.`);
 
-      // And revert to Camera or Home so they can try again or choose manual.
-      setState(AppState.HOME);
+      // Go to EDITING state so user can manually fill in data
+      // Image is still available in capturedImage state if they want to reference it
+      setState(AppState.EDITING);
     }
   };
 
@@ -429,17 +461,26 @@ const App: React.FC = () => {
   const performPrint = async (canvas: HTMLCanvasElement, settings: PrintSettings, isBatchItem = false) => {
     setIsProcessing(true);
 
-    // Improved UX: If already connected, skip the "Searching..." phase updates to reduce flicker
-    // But still set step to 'connecting' (or maybe 'printing') to ensure UI blocks interactions
+    // Enhanced UX: Provide clear visual feedback for connection state
     if (!isBatchItem) {
       setPrintStep(isConnected ? 'printing' : 'connecting');
-      if (!isConnected) setStatusMsg('Searching for printer...');
+      if (!isConnected) {
+        setStatusMsg('Searching for printer...');
+        toast.info("Connecting", "Select your printer from the dialog");
+      } else {
+        toast.info("Printing", "Sending label to printer...");
+      }
       setErrorMsg(null);
       setShowSuccess(false);
     }
 
     try {
       const device = await connectPrinter();
+
+      // Show connection success feedback
+      if (!isConnected && !isBatchItem) {
+        toast.success("Connected", `Connected to ${device.name}`);
+      }
 
       // Only fetch details if we don't have them or it's the first print
       if ((!printerInfo || !isBatchItem) && !isBatchPrinting && !isConnected) {
@@ -648,7 +689,7 @@ const App: React.FC = () => {
     else if (template.tags.includes('maintenance')) newSettings.theme = LabelTheme.MAINTENANCE;
     else newSettings.theme = LabelTheme.SWATCH;
 
-    setPrintSettings(newSettings);
+    updatePrintSettings(newSettings);
     setActiveTab('editor');
 
     setPrintStep('success');
@@ -673,7 +714,7 @@ const App: React.FC = () => {
   const resetFlow = () => {
     setState(AppState.HOME);
     setFilamentData(DEFAULT_DATA);
-    setPrintSettings(DEFAULT_SETTINGS);
+    updatePrintSettings(DEFAULT_SETTINGS);
     setErrorMsg(null);
     setStatusMsg('');
     setPrintStep('idle');
@@ -749,16 +790,17 @@ const App: React.FC = () => {
         <div className="sticky top-[88px] z-30 bg-gray-950/80 backdrop-blur-md border-b border-gray-800 px-4 transition-all duration-300 animate-fade-in-down">
           <div className="flex gap-4 overflow-x-auto no-scrollbar max-w-xl mx-auto">
             {[
-              { id: 'editor', label: 'Editor', icon: Edit3 },
-              { id: 'batch', label: 'Batch', icon: Layers },
-              { id: 'templates', label: 'Templates', icon: Layout },
-              { id: 'analytics', label: 'Analytics', icon: BarChart3 },
+              { id: 'editor', label: 'Editor', icon: Edit3, shortcut: 'Ctrl/Cmd + 1' },
+              { id: 'batch', label: 'Batch', icon: Layers, shortcut: 'Ctrl/Cmd + 2' },
+              { id: 'templates', label: 'Templates', icon: Layout, shortcut: 'Ctrl/Cmd + 3' },
+              { id: 'analytics', label: 'Analytics', icon: BarChart3, shortcut: 'Ctrl/Cmd + 4' },
             ].map((tab, index) => (
               <button
                 key={tab.id}
                 data-testid={`tab-${tab.id}`}
                 onClick={() => setActiveTab(tab.id as Tab)}
                 style={{ animationDelay: `${index * 0.05}s` }}
+                title={tab.shortcut}
                 className={`
                               flex items-center gap-2 py-3 px-1 border-b-2 transition-all whitespace-nowrap relative focus-ring stagger-item
                               ${activeTab === tab.id
@@ -769,7 +811,10 @@ const App: React.FC = () => {
                 <tab.icon size={16} className={activeTab === tab.id ? 'animate-pulse-slow' : ''} />
                 <span className="text-xs font-bold uppercase tracking-wider">{tab.label}</span>
                 {tab.id === 'batch' && sessionSelectedIds.size > 0 && (
-                    <span className="absolute top-1 right-[-4px] bg-cyan-600 text-white text-[9px] w-4 h-4 flex items-center justify-center rounded-full font-bold animate-spring-bounce">
+                    <span
+                      className="absolute top-1 right-[-4px] bg-cyan-600 text-white text-[9px] w-4 h-4 flex items-center justify-center rounded-full font-bold animate-spring-bounce"
+                      title={`${sessionSelectedIds.size} label${sessionSelectedIds.size > 1 ? 's' : ''} queued for batch printing`}
+                    >
                         {sessionSelectedIds.size}
                     </span>
                 )}
@@ -809,8 +854,12 @@ const App: React.FC = () => {
               )}
             </div>
             <button
-              onClick={() => setShowIframeWarning(false)}
+              onClick={() => {
+                setShowIframeWarning(false);
+                localStorage.setItem('iframe_warning_dismissed', 'true');
+              }}
               className="text-yellow-700 hover:text-yellow-500 p-1 rounded transition-colors"
+              title="Dismiss permanently"
             >
               <X size={16} />
             </button>
@@ -849,6 +898,7 @@ const App: React.FC = () => {
                 <button
                   onClick={handleStartCapture}
                   className="col-span-2 group relative flex items-center justify-between p-8 rounded-[2rem] bg-gradient-to-br from-cyan-950 via-gray-900 to-gray-950 border border-cyan-900/30 hover:border-cyan-500/50 transition-all duration-500 shadow-2xl overflow-hidden active:scale-[0.98] focus-ring stagger-item"
+                  title="Open camera (Ctrl/Cmd + K)"
                 >
                   <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,_var(--tw-gradient-stops))] from-cyan-500/10 via-transparent to-transparent opacity-50 group-hover:opacity-100 transition-opacity duration-500"></div>
                   <div className="relative z-10 flex flex-col items-start gap-2">
@@ -988,7 +1038,7 @@ const App: React.FC = () => {
                       <button
                         id={`label-${preset.id}`}
                         key={preset.id}
-                        onClick={() => setSelectedLabel(preset)}
+                        onClick={() => updateSelectedLabel(preset)}
                         className={`
                             w-[30%] min-w-[100px] p-2 rounded-xl border transition-all duration-200
                             flex flex-col items-center gap-2
@@ -1020,7 +1070,7 @@ const App: React.FC = () => {
                     data={filamentData}
                     settings={printSettings}
                     onChange={setFilamentData}
-                    onSettingsChange={setPrintSettings}
+                    onSettingsChange={updatePrintSettings}
                     onConfirm={() => { }}
                     onDownload={handleDownloadPng}
                   />
@@ -1046,7 +1096,7 @@ const App: React.FC = () => {
 
                 </section>
 
-                <PrinterTools settings={printSettings} onSettingsChange={setPrintSettings} />
+                <PrinterTools settings={printSettings} onSettingsChange={updatePrintSettings} />
               </>
             )}
 
@@ -1159,6 +1209,7 @@ const App: React.FC = () => {
               <button
                 onClick={handlePrint}
                 disabled={isProcessing}
+                title={isConnected ? 'Print label (Ctrl/Cmd + P)' : 'Connect to printer and print (Ctrl/Cmd + P)'}
                 className={`w-full py-4 rounded-xl shadow-2xl font-bold text-lg flex items-center justify-center gap-3 transition-all transform active:scale-95 focus-ring animate-smooth-scale-in relative overflow-hidden group
                   ${isProcessing ? 'bg-gray-800 text-gray-500 cursor-not-allowed' :
                     (filamentData.confidence !== undefined && filamentData.confidence < 80)

@@ -68,9 +68,21 @@ const CameraCapture: React.FC<CameraCaptureProps> = ({ onCapture, onCancel, onSc
       if (videoRef.current) {
         videoRef.current.srcObject = mediaStream;
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error("Camera access error:", err);
-      setError("Unable to access camera. Please allow permissions.");
+      let errorMsg = "Unable to access camera.";
+
+      if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+        errorMsg = "Camera permission denied. To enable:\n\n1. Click the camera icon in your browser's address bar\n2. Select 'Allow' for camera access\n3. Reload the page\n\nOr use the 'Gallery' option to upload a photo instead.";
+      } else if (err.name === 'NotFoundError') {
+        errorMsg = "No camera found on this device.\n\nYou can still use the 'Gallery' option to upload a photo or enter data manually.";
+      } else if (err.name === 'NotReadableError') {
+        errorMsg = "Camera is in use by another application.\n\nClose other apps using the camera and try again, or use the 'Gallery' option.";
+      } else {
+        errorMsg = `Camera error: ${err.message || 'Unknown'}\n\nTry the 'Gallery' option or enter data manually.`;
+      }
+
+      setError(errorMsg);
     }
   };
 

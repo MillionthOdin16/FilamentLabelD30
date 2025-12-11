@@ -73,6 +73,22 @@ const LabelEditor: React.FC<LabelEditorProps> = ({
   };
 
   const handleMaterialPreset = (preset: MaterialPreset) => {
+    // Preserve existing notes unless they're empty or match a previous preset's tips
+    let newNotes = data.notes || '';
+
+    // Only replace notes with preset tips if current notes are empty OR user confirms
+    if (!newNotes || newNotes.trim() === '') {
+      newNotes = preset.tips || '';
+    } else if (preset.tips) {
+      // Check if current notes look like preset tips (to avoid double-appending)
+      const isPreviousPresetTips = MATERIAL_PRESETS.some(p => p.tips === newNotes);
+      if (isPreviousPresetTips) {
+        // Replace previous preset tips with new ones
+        newNotes = preset.tips;
+      }
+      // Otherwise keep existing custom notes
+    }
+
     onChange({
       ...data,
       material: preset.material,
@@ -81,8 +97,7 @@ const LabelEditor: React.FC<LabelEditorProps> = ({
       bedTempMin: preset.bedTempMin,
       bedTempMax: preset.bedTempMax,
       hygroscopy: preset.hygroscopy,
-      // Always use preset tips if available, otherwise keep empty
-      notes: preset.tips || '',
+      notes: newNotes,
     });
   };
 
