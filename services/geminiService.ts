@@ -117,75 +117,104 @@ const FilamentAnalysisSchema = {
 };
 
 const SYSTEM_INSTRUCTION = `
-You are an expert 3D Printing Assistant and Materials Engineer. 
-Your task is to accurately identify 3D printer filament specifications from an image of a spool label and provide engaging, useful context.
+You are an expert 3D Printing Materials Analyst specializing in filament identification. 
+Your task is to accurately extract ALL specifications from a 3D printer filament spool label and provide actionable printing guidance.
 
-**CRITICAL: You must provide detailed logging AND output structured JSON at the end.**
+**TASK OVERVIEW:**
+Analyze the filament spool label image to identify: manufacturer, material type, color, temperature ranges, physical properties, and special features. Provide real-time logging and output structured JSON.
 
 **LOGGING FORMAT (for real-time user feedback):**
-1. Every analysis step MUST start with "LOG: " prefix
-2. Every bounding box MUST start with "BOX: " prefix  
-3. Be verbose, engaging, and detailed.
-   - Instead of "Found brand", say "LOG: Identified manufacturer as Prusament (known for high precision)"
-   - Instead of "Found color", say "LOG: Detected color 'Galaxy Black' - a popular sparkly black"
+1. ALWAYS prefix analysis steps with "LOG: " 
+2. ALWAYS prefix detected regions with "BOX: [label] [ymin, xmin, ymax, xmax]"
+3. Be specific and informative - explain WHY each finding matters to printing
+4. Use this format for detections:
+   - "LOG: Detected brand: BRANDNAME (reputation/known-for)"
+   - "LOG: Detected material: MATERIAL (key-property)"
+   - "LOG: Detected color name: COLORNAME"
+   - "LOG: Color hex code found: #HEXCODE"
+   - "LOG: Detected nozzle temperature range: MIN-MAX°C"
+   - "LOG: Detected bed temperature range: MIN-MAX°C"
 
-Example logs:
-LOG: Initializing optical character recognition...
-LOG: Detected brand: OVERTURE (popular reliable brand)
-BOX: Brand [100, 200, 150, 400]
-LOG: Detected material: ROCK PLA
-LOG: Detected color name: Mars Red
-LOG: Color hex code found: #D76D3B
-LOG: Detected nozzle temperature range: 190-230°C
-LOG: Detected bed temperature range: 50-70°C
-LOG: Detected filament diameter: 1.75mm ±0.02mm
-LOG: Detected empty spool weight: ~147g (cardboard spool)
-LOG: Detected feature: ROCK-LIKE TEXTURE
-LOG: Search results confirm Mars Red hex code and specifications
-LOG: Interesting fact: Rock PLA uses marble powder to hide layer lines
-LOG: Printing Tip: Use a 0.6mm nozzle to prevent clogging with composite materials
+**OPTIMIZED ANALYSIS WORKFLOW:**
+1. **Initial Scan** - Identify label type and orientation
+   LOG: Analyzing spool label layout and text orientation...
+   
+2. **Brand Recognition** - Look for manufacturer name/logo (usually prominent)
+   BOX: Brand [coordinates]
+   LOG: Detected brand: BRANDNAME (describe reputation)
+   
+3. **Material Identification** - Find material type (PLA, PETG, ABS, TPU, etc.)
+   BOX: Material [coordinates]
+   LOG: Detected material: MATERIAL (mention key property: strength/flexibility/temp-resistance)
+   
+4. **Color Analysis** - Extract color name AND analyze visual color
+   LOG: Detected color name: COLORNAME
+   LOG: Color hex code found: #HEXCODE (or estimate from image)
+   
+5. **Temperature Specifications** - Critical for printing success
+   LOG: Detected nozzle temperature range: MIN-MAX°C
+   LOG: Detected bed temperature range: MIN-MAX°C
+   
+6. **Physical Properties** - Weight, diameter, length, spool weight
+   LOG: Detected weight: VALUE
+   LOG: Detected filament diameter: VALUE
+   LOG: Detected length: VALUE (if available)
+   LOG: Detected empty spool weight: VALUE (if available)
+   
+7. **Special Features** - Look for: composite/filled, flexible, silk, matte, glow, UV-resistant, etc.
+   LOG: Detected feature: FEATURE (explain benefit)
+   
+8. **Moisture Sensitivity** - Determine hygroscopy based on material
+   LOG: Material moisture sensitivity: LOW/MEDIUM/HIGH
+   
+9. **Web Search Validation** - Search for product to verify specs and gather tips
+   LOG: Searching for "[brand] [material] [color]" specifications...
+   LOG: Found product page: [url]
+   LOG: Verified specifications match/differ...
+   LOG: Additional info: [interesting-fact-or-tip]
+   
+10. **Confidence Assessment** - Calculate based on detected fields
+    LOG: Analysis confidence: XX% (based on Y/Z fields detected)
 
-**FINAL JSON OUTPUT (after all logs):**
-After streaming all your LOG: and BOX: messages, output a complete JSON object with these EXACT fields:
+**FINAL JSON OUTPUT:**
+After ALL logs, output this JSON structure (NO markdown blocks):
 
 {
-  "brand": "string - Manufacturer name",
-  "material": "string - Material type with modifiers",
-  "colorName": "string - Color from label",
-  "colorHex": "string - Hex code with #",
-  "minTemp": "number - Min nozzle temp (C)",
-  "maxTemp": "number - Max nozzle temp (C)",
-  "bedTempMin": "number - Min bed temp (C)",
-  "bedTempMax": "number - Max bed temp (C)",
-  "weight": "string - Weight with units",
-  "diameter": "string - Diameter",
-  "spoolWeight": "string - Empty spool weight",
-  "length": "string - Filament length",
-  "features": "array - Features list",
-  "notes": "string - Comprehensive notes including: technical details, abrasiveness, nozzle recommendations, texture, AND interesting facts or trivia about the material/brand found during analysis.",
-  "hygroscopy": "string - 'low', 'medium', or 'high'",
-  "confidence": "number - Score 0-100"
+  "brand": "Exact manufacturer name from label",
+  "material": "Complete material type (include modifiers like 'Silk', 'Carbon Fiber', 'Rock')",
+  "colorName": "Exact color name from label",
+  "colorHex": "#HEXCODE (from color swatch or visual analysis)",
+  "minTemp": 190,
+  "maxTemp": 230,
+  "bedTempMin": 50,
+  "bedTempMax": 70,
+  "weight": "1kg",
+  "diameter": "1.75mm",
+  "spoolWeight": "200g",
+  "length": "330m",
+  "features": ["Feature 1", "Feature 2"],
+  "notes": "Comprehensive printing guidance: abrasiveness level (use hardened nozzle?), optimal nozzle size, bed adhesion tips, special handling (drying requirements), material properties (brittle/flexible/strong), print settings recommendations, common issues and solutions, interesting trivia about material or brand.",
+  "hygroscopy": "low|medium|high",
+  "confidence": 85
 }
 
-**CRITICAL REQUIREMENTS:**
-- First stream all LOG: messages as you analyze
-- Then at the very end output ONLY the JSON object
-- DO NOT wrap JSON in markdown code blocks
-- DO NOT add any text before or after the JSON
-- Include **interesting facts, printing tips, and trivia** in the 'notes' field.
-- **YOU MUST OUTPUT THE JSON OBJECT** - it is required for the system to work
-- Extract exact values when visible on label
-- Use search to validate and fill missing details
+**CRITICAL RULES:**
+✓ Stream detailed LOG messages for user engagement
+✓ Use Google Search tool to validate and enrich data
+✓ Extract EXACT text from label (don't infer brand names)
+✓ Provide actionable printing tips in notes field
+✓ Output clean JSON at end (NO markdown, NO extra text)
+✓ If text unclear, state uncertainty: "LOG: Brand partially visible, best guess: X"
+✓ Confidence score = (detected_required_fields / total_required_fields) * 100
 
-**ANALYSIS STEPS:**
-1. OCR & Text Extraction: Read ALL visible text. Log each finding.
-2. Bounding Boxes: For important regions, output BOX coordinates.
-3. Google Search Validation: Search for exact product. Log findings.
-4. Color Analysis: Analyze visible color. Confirm with search.
-5. Feature Detection: List all special features.
-6. Technical Details: Extract diameter, weights, lengths, warnings.
-7. Contextual Enrichment: Find interesting facts or tips about this specific filament.
-8. Final JSON: Output complete structured data.
+**MATERIAL-SPECIFIC GUIDANCE:**
+- PLA/PLA+: Low hygroscopy, easy printing, mention biodegradable
+- PETG: Medium hygroscopy, strong, flexible, mention stringing tendency
+- ABS/ASA: Medium hygroscopy, needs enclosure, mention fumes
+- TPU/Flexible: High hygroscopy, slow printing, mention retraction settings
+- Nylon: High hygroscopy, MUST dry before use, very hygroscopic
+- Composites (Wood/Metal/Carbon): Abrasive, recommend hardened nozzle
+- Silk/Satin: Aesthetic finish, mention slower speeds for better finish
 `;
 
 
@@ -235,71 +264,151 @@ function getFriendlyErrorMessage(error: any): string {
 }
 
 // Helper function to extract detected data from log text
+// Enhanced with more flexible patterns and better validation
 function extractDataFromLog(logText: string): Partial<FilamentData> {
     const result: Partial<FilamentData> = {};
     
-    // Extract brand - STRICT: only match "Detected brand:" format
-    // Matches: "Detected brand: OVERTURE®" or "Detected brand name: Overture"
-    const brandMatch = logText.match(/Detected\s+(?:brand|manufacturer)(?:\s+name)?:\s*([A-Z][A-Za-z0-9\s&®™-]+?)(?:\s*$|\.)/i);
-    if (brandMatch) {
-        const brand = brandMatch[1].trim();
-        // Validate: must be more than just "name" or generic words, and not too long
-        if (brand.length > 2 && brand.length < 50 && !['name', 'brand', 'manufacturer', 'the', 'is'].includes(brand.toLowerCase())) {
-            result.brand = brand;
+    // Extract brand - Multiple pattern support
+    // Matches: "Detected brand: OVERTURE®", "Brand: Hatchbox", "Manufacturer: eSUN"
+    const brandPatterns = [
+        /Detected\s+(?:brand|manufacturer)(?:\s+name)?:\s*([A-Z][A-Za-z0-9\s&®™+'-]+?)(?:\s*[(\n]|$|\.)/i,
+        /(?:^|\s)brand:\s*([A-Z][A-Za-z0-9\s&®™+'-]+?)(?:\s*[(\n]|$|\.)/i,
+        /manufacturer:\s*([A-Z][A-Za-z0-9\s&®™+'-]+?)(?:\s*[(\n]|$|\.)/i
+    ];
+    
+    for (const pattern of brandPatterns) {
+        const match = logText.match(pattern);
+        if (match) {
+            const brand = match[1].trim();
+            // Validate: reasonable brand name
+            if (brand.length >= 2 && brand.length < 50 && 
+                !['name', 'brand', 'manufacturer', 'the', 'is', 'from'].includes(brand.toLowerCase()) &&
+                !brand.toLowerCase().includes('unknown')) {
+                result.brand = brand;
+                break;
+            }
         }
     }
     
-    // Extract material - STRICT: only match "Detected material:" format
-    // Matches: "Detected material: ROCK PLA" or "Detected material type: PETG"
-    const materialMatch = logText.match(/Detected\s+(?:material|type)(?:\s+type)?:\s*([A-Z][A-Za-z0-9\s+\-]+?)(?:\s*$|\.)/i);
-    if (materialMatch) {
-        const material = materialMatch[1].trim();
-        // Validate: must not be a sentence fragment and reasonable length
-        if (material.length <= 30 && material.length > 2 && 
-            !material.toLowerCase().includes('may not') && 
-            !material.toLowerCase().includes('inherently') &&
-            !material.toLowerCase().includes('with ') &&
-            !material.toLowerCase().includes('made ')) {
-            result.material = material;
+    // Extract material - Enhanced patterns
+    // Matches: "Detected material: ROCK PLA", "Material type: Carbon Fiber PETG", "Material: Silk PLA+"
+    const materialPatterns = [
+        /Detected\s+(?:material|type)(?:\s+type)?:\s*([A-Z][A-Za-z0-9\s+\-/]+?)(?:\s*[(\n]|$|\.)/i,
+        /(?:^|\s)material(?:\s+type)?:\s*([A-Z][A-Za-z0-9\s+\-/]+?)(?:\s*[(\n]|$|\.)/i,
+        /filament\s+type:\s*([A-Z][A-Za-z0-9\s+\-/]+?)(?:\s*[(\n]|$|\.)/i
+    ];
+    
+    for (const pattern of materialPatterns) {
+        const match = logText.match(pattern);
+        if (match) {
+            const material = match[1].trim();
+            // Validate: reasonable material name
+            if (material.length <= 40 && material.length > 2 && 
+                !material.toLowerCase().includes('may not') && 
+                !material.toLowerCase().includes('inherently') &&
+                !material.toLowerCase().includes('sensitivity') &&
+                !material.toLowerCase().includes('unknown')) {
+                result.material = material;
+                break;
+            }
         }
     }
     
-    // Extract color name - STRICT: only match "Detected color:" format  
-    // Matches: "Detected color name: Mars Red" or "Detected color: Red"
-    const colorMatch = logText.match(/Detected\s+(?:color|colour)(?:\s+name)?:\s*([A-Z][A-Za-z\s-]+?)(?:\s*$|\.)/i);
-    if (colorMatch) {
-        const color = colorMatch[1].trim();
-        // Validate: must be a reasonable color name, not a sentence, not too long
-        if (color.length <= 30 && color.length > 2 &&
-            !color.toLowerCase().includes('name on') && 
-            !color.toLowerCase().includes('separate') &&
-            !color.toLowerCase().includes('and ') &&
-            !color.toLowerCase().includes('provide')) {
-            result.colorName = color;
+    // Extract color name - Multiple patterns
+    // Matches: "Detected color name: Mars Red", "Color: Galaxy Black", "Colour name: Ocean Blue"
+    const colorPatterns = [
+        /Detected\s+(?:color|colour)(?:\s+name)?:\s*([A-Z][A-Za-z\s\-/]+?)(?:\s*[(\n]|$|\.)/i,
+        /(?:^|\s)(?:color|colour)(?:\s+name)?:\s*([A-Z][A-Za-z\s\-/]+?)(?:\s*[(\n]|$|\.)/i
+    ];
+    
+    for (const pattern of colorPatterns) {
+        const match = logText.match(pattern);
+        if (match) {
+            const color = match[1].trim();
+            // Validate: reasonable color name
+            if (color.length <= 40 && color.length > 2 &&
+                !color.toLowerCase().includes('name on') && 
+                !color.toLowerCase().includes('separate') &&
+                !color.toLowerCase().includes('hex') &&
+                !color.toLowerCase().includes('unknown')) {
+                result.colorName = color;
+                break;
+            }
         }
     }
     
-    // Extract color hex (validates format)
-    const hexMatch = logText.match(/#([A-Fa-f0-9]{6})/);
+    // Extract color hex - Enhanced pattern
+    const hexMatch = logText.match(/#([A-Fa-f0-9]{6})\b/);
     if (hexMatch) result.colorHex = '#' + hexMatch[1].toUpperCase();
     
-    // Extract nozzle temperature range (handles various dash types)
-    const nozzleMatch = logText.match(/nozzle\s*(?:temp|temperature)(?:\s+range)?[\s:]*(\d+)\s*[-–—]\s*(\d+)\s*°?C/i);
-    if (nozzleMatch) {
-        result.minTemp = parseInt(nozzleMatch[1]);
-        result.maxTemp = parseInt(nozzleMatch[2]);
+    // Extract nozzle temperature - More flexible patterns
+    const nozzlePatterns = [
+        /(?:nozzle|extruder|printing)\s*(?:temp|temperature)(?:\s+range)?[\s:]*(\d{2,3})\s*[-–—~]\s*(\d{2,3})\s*°?C/i,
+        /print(?:ing)?\s*temp(?:erature)?[\s:]*(\d{2,3})\s*[-–—~]\s*(\d{2,3})\s*°?C/i,
+        /temp(?:erature)?[\s:]*(\d{2,3})\s*[-–—~]\s*(\d{2,3})\s*°?C(?!.*bed)/i
+    ];
+    
+    for (const pattern of nozzlePatterns) {
+        const match = logText.match(pattern);
+        if (match) {
+            const temp1 = parseInt(match[1]);
+            const temp2 = parseInt(match[2]);
+            // Validate: reasonable nozzle temps (150-350°C)
+            if (temp1 >= 150 && temp1 <= 350 && temp2 >= 150 && temp2 <= 350) {
+                result.minTemp = Math.min(temp1, temp2);
+                result.maxTemp = Math.max(temp1, temp2);
+                break;
+            }
+        }
     }
     
-    // Extract bed temperature range (handles various dash types)
-    const bedMatch = logText.match(/bed\s*(?:temp|temperature)(?:\s+range)?[\s:]*(\d+)\s*[-–—]\s*(\d+)\s*°?C/i);
-    if (bedMatch) {
-        result.bedTempMin = parseInt(bedMatch[1]);
-        result.bedTempMax = parseInt(bedMatch[2]);
+    // Extract bed temperature - Enhanced patterns
+    const bedPatterns = [
+        /(?:bed|platform|build\s*plate)\s*(?:temp|temperature)(?:\s+range)?[\s:]*(\d{2,3})\s*[-–—~]\s*(\d{2,3})\s*°?C/i,
+        /heated\s*bed[\s:]*(\d{2,3})\s*[-–—~]\s*(\d{2,3})\s*°?C/i
+    ];
+    
+    for (const pattern of bedPatterns) {
+        const match = logText.match(pattern);
+        if (match) {
+            const temp1 = parseInt(match[1]);
+            const temp2 = parseInt(match[2]);
+            // Validate: reasonable bed temps (0-150°C)
+            if (temp1 >= 0 && temp1 <= 150 && temp2 >= 0 && temp2 <= 150) {
+                result.bedTempMin = Math.min(temp1, temp2);
+                result.bedTempMax = Math.max(temp1, temp2);
+                break;
+            }
+        }
     }
     
-    // Extract weight
-    const weightMatch = logText.match(/(?:detected\s+)?(?:weight|mass)(?:\s+range)?[\s:]*(\d+\.?\d*\s*(?:kg|g|lb))/i);
-    if (weightMatch) result.weight = weightMatch[1].trim();
+    // Extract weight - Multiple patterns
+    const weightPatterns = [
+        /(?:detected\s+)?(?:weight|mass|net\s*weight)[\s:]*(\d+\.?\d*\s*(?:kg|g|lb|oz))/i,
+        /(?:spool|filament)\s+weight[\s:]*(\d+\.?\d*\s*(?:kg|g|lb|oz))/i,
+        /(\d+\.?\d*)\s*(?:kg|g|lb|oz)(?:\s+net|\s+weight)?/i
+    ];
+    
+    for (const pattern of weightPatterns) {
+        const match = logText.match(pattern);
+        if (match) {
+            result.weight = match[1].trim();
+            break;
+        }
+    }
+    
+    // Extract diameter
+    const diameterMatch = logText.match(/(?:diameter|dia\.?)[\s:]*(\d+\.?\d*\s*mm)/i);
+    if (diameterMatch) {
+        // Store in notes since diameter isn't in FilamentData
+        result.notes = (result.notes || '') + `\nDiameter: ${diameterMatch[1]}`;
+    }
+    
+    // Extract hygroscopy/moisture sensitivity
+    const hygroMatch = logText.match(/(?:moisture|hygroscopy|hygroscopic)[\s:]*(low|medium|high)/i);
+    if (hygroMatch) {
+        result.hygroscopy = hygroMatch[1].toLowerCase() as 'low' | 'medium' | 'high';
+    }
     
     return result;
 }
@@ -339,7 +448,7 @@ export const analyzeFilamentImage = async (
             contents: {
                 parts: [
                 { inlineData: { mimeType: "image/jpeg", data: cleanBase64 } },
-                { text: "Analyze this filament spool label thoroughly. First, stream detailed LOG: messages as you identify each piece of information. Then at the very end, output a complete JSON object with all the extracted data. The JSON must be valid and not wrapped in markdown. This JSON is critical - the system depends on it." }
+                { text: "Analyze this 3D printer filament spool label image using the optimized workflow. Extract ALL specifications visible on the label: brand/manufacturer, material type (PLA/PETG/ABS/etc. with any modifiers), color name, temperatures (nozzle & bed), weight, diameter, and features. Stream informative LOG: messages as you detect each field. Use Google Search to validate and enrich your findings. End with a clean JSON object (no markdown) containing all extracted data. Be thorough and accurate - this data will be used for label printing and print settings." }
                 ]
             },
             config: {
