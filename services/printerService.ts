@@ -39,8 +39,12 @@ export const getConnectedDevice = (): BluetoothDevice | null => {
 };
 
 export const disconnectPrinter = () => {
-    if (cachedDevice && cachedDevice.gatt?.connected) {
-        cachedDevice.gatt.disconnect();
+    if (cachedDevice?.gatt?.connected) {
+        try {
+            cachedDevice.gatt.disconnect();
+        } catch (error) {
+            console.error('Error disconnecting printer:', error);
+        }
     }
     cachedDevice = null;
     notifyListeners(false);

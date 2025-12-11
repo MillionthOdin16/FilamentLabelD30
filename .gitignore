@@ -30,3 +30,9 @@ test-results
 # Demo and temporary files
 mock-analysis-demo.js
 .env
+
+# Standalone test scripts (optional utilities)
+e2e-test.cjs
+proxy-server.cjs
+test-data-flow.cjs
+test-with-real-api.cjs

@@ -1,9 +1,9 @@
 
-import { test, expect } from '@playwright/test';
+import { test, expect, Page } from '@playwright/test';
 import { mockBluetooth } from '../fixtures/mock-bluetooth';
 
 // Helper to wait for animations
-const waitForTransition = async (page) => await page.waitForTimeout(300);
+const waitForTransition = async (page: Page) => await page.waitForTimeout(300);
 
 test.describe('Deep UI Audit', () => {
   test.beforeEach(async ({ page }) => {
