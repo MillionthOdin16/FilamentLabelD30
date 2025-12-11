@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Camera, Printer, RotateCcw, PenTool, Bluetooth, Ruler, Battery, BatteryFull, BatteryLow, BatteryMedium, ExternalLink, AlertTriangle, X, Image as ImageIcon, Edit3, CheckCircle2, Layout, BarChart3, Layers, PlusCircle, Scan } from 'lucide-react';
 import { AppState, FilamentData, LABEL_PRESETS, LabelPreset, PrintSettings, HistoryEntry, LabelTheme, PrinterInfo, PrintJob, LabelTemplate } from './types';
 import { analyzeFilamentImage } from './services/geminiService';
-import { connectPrinter, printLabel, getBatteryLevel, getDeviceDetails, checkPrinterStatus, addConnectionListener, removeConnectionListener, getConnectedDevice, addStatusListener, tryReconnect } from './services/printerService';
+import { connectPrinter, printLabel, getBatteryLevel, getDeviceDetails, checkPrinterStatus, addConnectionListener, removeConnectionListener, getConnectedDevice, addStatusListener, removeStatusListener, tryReconnect } from './services/printerService';
 import CameraCapture from './components/CameraCapture';
 import LabelEditor from './components/LabelEditor';
 import LabelCanvas from './components/LabelCanvas';
@@ -144,7 +144,7 @@ const App: React.FC = () => {
 
     return () => {
       removeConnectionListener(listener);
-      removeStatusListener(statusListener); // Fixed: was removeStatusListener(statusListener) which is correct
+      removeStatusListener(statusListener);
     };
   }, []);
 
@@ -257,7 +257,8 @@ const App: React.FC = () => {
               
               // Update if: no existing value OR new value has higher confidence
               if (!oldValue || !dataConfidence[k] || confidence > dataConfidence[k]) {
-                accumulatedData[k] = newValue as any;
+                // @ts-ignore
+                accumulatedData[k] = newValue;
                 dataConfidence[k] = confidence;
               }
             });
@@ -279,10 +280,12 @@ const App: React.FC = () => {
                 const isDefault = !currentValue || currentValue === '' || currentValue === DEFAULT_DATA[k];
                 
                 if (isDefault) {
-                  updated[k] = newValue as any;
+                  // @ts-ignore
+                  updated[k] = newValue;
                 } else if (dataConfidence[k] > 2) {
                   // High confidence override
-                  updated[k] = newValue as any;
+                  // @ts-ignore
+                  updated[k] = newValue;
                 }
               });
               return updated;
@@ -540,7 +543,10 @@ const App: React.FC = () => {
     // Trigger only when batchCanvas becomes available OR if we are just starting/transitioning
     // We add a small timeout to let React render the hidden canvas
     if (isBatchPrinting && batchCanvas) {
-         const timer = setTimeout(processBatchItem, 500);
+         // Using requestAnimationFrame to ensure render is complete, plus a small safety buffer
+         const timer = setTimeout(() => {
+             requestAnimationFrame(() => processBatchItem());
+         }, 300);
          return () => clearTimeout(timer);
     }
   }, [batchCanvas, isBatchPrinting, currentBatchIndex, batchQueue]);

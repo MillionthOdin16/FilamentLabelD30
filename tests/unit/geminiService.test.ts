@@ -1,6 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { analyzeFilamentImage } from '../../services/geminiService';
 
+// Mock import.meta.env
+vi.stubGlobal('import', { meta: { env: { VITE_GEMINI_API_KEY: 'test-key' } } });
+
 const { mockGenerateContentStream } = vi.hoisted(() => {
   return { mockGenerateContentStream: vi.fn() };
 });
@@ -36,7 +39,7 @@ const createMockStreamResponse = (chunks: string[]) => {
 describe('Gemini Service', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    process.env.API_KEY = 'test-key';
+    // We don't need to set process.env.API_KEY because we are mocking import.meta.env
   });
 
   it('should parse valid JSON response', async () => {

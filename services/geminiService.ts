@@ -444,7 +444,7 @@ export const analyzeFilamentImage = async (
                     bedTempMin: parsed.bedTempMin || 50,
                     bedTempMax: parsed.bedTempMax || 60,
                     weight: parsed.weight || '1kg',
-                    diameter: parsed.diameter || '1.75mm',
+                    // diameter is not in FilamentData, append to notes
                     hygroscopy: parsed.hygroscopy || 'low',
                     notes: parsed.notes || '',
                     confidence: parsed.confidence || 50,
@@ -457,6 +457,9 @@ export const analyzeFilamentImage = async (
                 }
                 if (parsed.length && !data.notes.includes(parsed.length)) {
                     data.notes = `${data.notes}\nLength: ${parsed.length}`.trim();
+                }
+                if (parsed.diameter && !data.notes.includes(parsed.diameter)) {
+                    data.notes = `${data.notes}\nDiameter: ${parsed.diameter}`.trim();
                 }
                 if (parsed.features && Array.isArray(parsed.features) && parsed.features.length > 0) {
                     data.notes = `${data.notes}\nFeatures: ${parsed.features.join(', ')}`.trim();
@@ -478,7 +481,7 @@ export const analyzeFilamentImage = async (
                 bedTempMin: 50,
                 bedTempMax: 60,
                 weight: '1kg',
-                diameter: '1.75mm',
+                // diameter not in FilamentData
                 hygroscopy: 'low' as const,
                 notes: 'Analysis completed but JSON parsing failed. Data extracted from logs.',
                 confidence: 0,
@@ -487,7 +490,7 @@ export const analyzeFilamentImage = async (
         }
 
         // Extract Grounding Source URL
-        const response = await result.response;
+        const response = await (result as any).response;
         let referenceUrl = '';
         const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks;
         if (chunks && chunks.length > 0) {
