@@ -95,19 +95,20 @@ const ALL_OPTIONAL_SERVICES = [
  * Attempt to reconnect to a previously authorized device without user interaction
  */
 export const tryReconnect = async (): Promise<boolean> => {
-    if (!navigator.bluetooth || !navigator.bluetooth.getDevices) {
+    // Check if getDevices is available (Chrome 85+)
+    if (!navigator.bluetooth || !('getDevices' in navigator.bluetooth)) {
         return false;
     }
 
     try {
-        const devices = await navigator.bluetooth.getDevices();
+        const devices = await (navigator.bluetooth as any).getDevices();
         if (devices.length > 0) {
-            console.log("Found authorized devices:", devices.map(d => d.name));
+            console.log("Found authorized devices:", devices.map((d: any) => d.name));
 
             // Prioritize last connected device
             const lastDeviceId = localStorage.getItem('last_printer_id');
             if (lastDeviceId) {
-                devices.sort((a, b) => {
+                devices.sort((a: any, b: any) => {
                     if (a.id === lastDeviceId) return -1;
                     if (b.id === lastDeviceId) return 1;
                     return 0;
@@ -287,7 +288,10 @@ export const feedPaper = async (device: BluetoothDevice) => {
 
 export const checkPrinterStatus = async (device: BluetoothDevice): Promise<'ready' | 'paper_out' | 'cover_open' | 'unknown'> => {
     if (!device.gatt?.connected) return 'unknown';
+
     // Most cheap printers don't reliably report status via standard characteristics
+    // TODO: Implement specific status checks for supported models if possible.
+    // For now, assume ready if connected to avoid blocking prints.
     return 'ready';
 };
 

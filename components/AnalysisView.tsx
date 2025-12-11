@@ -52,7 +52,8 @@ const AnalysisView: React.FC<AnalysisViewProps> = ({ imageSrc, logs, boxes, onCo
   useEffect(() => {
     if (onComplete && processingStage === 'Complete') {
       // Find the last summary-like log
-      const summaryLog = logs.findLast(l => l.text.length > 50 && !l.text.includes('LOG:'))?.text;
+      // Polyfill findLast
+      const summaryLog = [...logs].reverse().find(l => l.text.length > 50 && !l.text.includes('LOG:'))?.text;
       if (summaryLog) onComplete(summaryLog);
     }
   }, [processingStage, logs, onComplete]);
