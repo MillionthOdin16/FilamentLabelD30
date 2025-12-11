@@ -103,10 +103,19 @@ export const tryReconnect = async (): Promise<boolean> => {
         const devices = await navigator.bluetooth.getDevices();
         if (devices.length > 0) {
             console.log("Found authorized devices:", devices.map(d => d.name));
+
+            // Prioritize last connected device
+            const lastDeviceId = localStorage.getItem('last_printer_id');
+            if (lastDeviceId) {
+                devices.sort((a, b) => {
+                    if (a.id === lastDeviceId) return -1;
+                    if (b.id === lastDeviceId) return 1;
+                    return 0;
+                });
+            }
+
             // Try to connect to the first available one that looks like a printer
             for (const device of devices) {
-                // If we have a cached device, use that ID preference?
-                // Just try to connect to the first one.
                 try {
                     device.addEventListener('gattserverdisconnected', () => {
                         console.log("Printer disconnected");
@@ -160,6 +169,7 @@ export const connectPrinter = async (): Promise<BluetoothDevice> => {
         });
 
         cachedDevice = device;
+        localStorage.setItem('last_printer_id', device.id);
         notifyListeners(true);
         return device;
     } catch (e) {
