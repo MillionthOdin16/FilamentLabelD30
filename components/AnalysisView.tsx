@@ -429,15 +429,15 @@ const AnalysisView: React.FC<AnalysisViewProps> = ({ imageSrc, logs, boxes, onCo
 
         {/* Logs Terminal */}
         <div className="mt-auto pt-3 sm:pt-4 md:pt-6">
-            <div className="bg-black/80 backdrop-blur-md border border-gray-800 rounded-lg sm:rounded-xl overflow-hidden shadow-2xl flex flex-col animate-fade-in-up delay-200" style={{height: logs.length > 10 ? '140px' : '120px', maxHeight: '200px'}}>
+            <div className="bg-black/80 backdrop-blur-md border border-gray-800 rounded-lg sm:rounded-xl overflow-hidden shadow-2xl flex flex-col animate-fade-in-up delay-200 h-[120px] sm:h-[140px] max-h-[200px]">
                 <div className="flex items-center justify-between px-2 sm:px-3 py-1.5 sm:py-2 border-b border-gray-800 bg-gray-900/50">
                     <div className="flex items-center gap-1.5 sm:gap-2">
-                        <Terminal size={10} className="text-gray-500" />
+                        <Terminal className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-gray-500" />
                         <span className="text-[9px] sm:text-[10px] font-bold text-gray-500 uppercase tracking-wider">Processing Stream</span>
                         <span className="text-[8px] sm:text-[9px] bg-cyan-900/30 text-cyan-400 px-1 sm:px-1.5 py-0.5 rounded-full">{logs.length}</span>
                     </div>
                     <button onClick={handleCopy} className="text-gray-600 hover:text-white transition-colors p-1 hover:bg-gray-800 rounded" title="Copy logs">
-                        <Copy size={10} className="sm:w-3 sm:h-3" />
+                        <Copy className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
                     </button>
                 </div>
 
