@@ -401,7 +401,8 @@ function extractDataFromLog(logText: string): Partial<FilamentData> {
     const diameterMatch = logText.match(/(?:diameter|dia\.?)[\s:]*(\d+\.?\d*\s*mm)/i);
     if (diameterMatch) {
         // Store in notes since diameter isn't in FilamentData
-        result.notes = (result.notes || '') + `\nDiameter: ${diameterMatch[1]}`;
+        const diameterInfo = `Diameter: ${diameterMatch[1]}`;
+        result.notes = result.notes ? `${result.notes}\n${diameterInfo}` : diameterInfo;
     }
     
     // Extract hygroscopy/moisture sensitivity

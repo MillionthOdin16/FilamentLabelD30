@@ -12,14 +12,18 @@ interface AnalysisViewProps {
   detectedData?: Partial<FilamentData>;
 }
 
+// Define key fields for confidence calculation
+const CONFIDENCE_FIELDS: (keyof FilamentData)[] = [
+  'brand', 'material', 'colorName', 'colorHex', 'minTemp', 'maxTemp', 'weight'
+];
+
 // Calculate confidence based on detected fields
 const calculateConfidence = (data: Partial<FilamentData>): number => {
-  const fields = ['brand', 'material', 'colorName', 'colorHex', 'minTemp', 'maxTemp', 'weight'];
-  const detected = fields.filter(field => {
-    const value = data[field as keyof FilamentData];
+  const detected = CONFIDENCE_FIELDS.filter(field => {
+    const value = data[field];
     return value !== undefined && value !== null && value !== '';
   });
-  return Math.round((detected.length / fields.length) * 100);
+  return Math.round((detected.length / CONFIDENCE_FIELDS.length) * 100);
 };
 
 // Helper function to validate and sanitize hex color
@@ -439,12 +443,13 @@ const AnalysisView: React.FC<AnalysisViewProps> = ({ imageSrc, logs, boxes, onCo
 
                 <div ref={scrollRef} className="flex-1 overflow-y-auto p-3 font-mono text-[10px] space-y-1 custom-scrollbar">
                     {logs.map((log, i) => {
-                        const isImportant = log.text.toLowerCase().includes('detected') || 
-                                          log.text.toLowerCase().includes('found') ||
-                                          log.text.toLowerCase().includes('complete');
-                        const isError = log.text.toLowerCase().includes('error') || 
-                                       log.text.toLowerCase().includes('failed');
-                        const isWarning = log.text.toLowerCase().includes('warning');
+                        const logLower = log.text.toLowerCase();
+                        const isImportant = logLower.includes('detected') || 
+                                          logLower.includes('found') ||
+                                          logLower.includes('complete');
+                        const isError = logLower.includes('error') || 
+                                       logLower.includes('failed');
+                        const isWarning = logLower.includes('warning');
                         
                         return (
                             <div 
