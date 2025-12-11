@@ -16,6 +16,7 @@ import BatchGenerator from './components/BatchGenerator';
 import AnalyticsDashboard from './components/AnalyticsDashboard';
 import TemplateGallery from './components/TemplateGallery';
 import KeyboardShortcuts from './components/KeyboardShortcuts';
+import TopLoadingBar from './components/TopLoadingBar';
 import { useToast } from './components/ToastProvider';
 
 const DEFAULT_DATA: FilamentData = {
@@ -703,6 +704,9 @@ const App: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gray-950 text-gray-100 font-sans selection:bg-cyan-500/30">
+      {/* Top Loading Bar */}
+      <TopLoadingBar isLoading={state === AppState.ANALYZING || isProcessing || isBatchPrinting} />
+      
       <header className="p-6 flex justify-between items-center bg-gray-900 border-b border-gray-800 sticky top-0 z-40 shadow-md backdrop-blur-sm bg-opacity-90 h-[88px]">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 bg-gradient-to-br from-cyan-400 to-blue-600 rounded-lg flex items-center justify-center shadow-lg shadow-cyan-900/20">
