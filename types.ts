@@ -75,6 +75,8 @@ export interface PrintSettings {
   autoCalibrate?: boolean;
   printOffsetMm?: number;
   includeRuler?: boolean;
+  widthMm?: number;
+  heightMm?: number;
 }
 
 export interface AdvancedPrintSettings extends PrintSettings {

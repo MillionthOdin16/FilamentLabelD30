@@ -91,7 +91,9 @@ export const generateBatchJobs = (
                     labelType: 'gap',
                     justification: 'center',
                     autoCalibrate: false,
-                    qualityMode: 'normal'
+                    qualityMode: 'normal',
+                    widthMm: recommendation.preset.widthMm,
+                    heightMm: recommendation.preset.heightMm
                 } as AdvancedPrintSettings
                 : {
                     copies: 1,
@@ -106,7 +108,9 @@ export const generateBatchJobs = (
                         notes: true,
                         date: options.addTimeStamps,
                         source: false
-                    }
+                    },
+                    widthMm: recommendation.preset.widthMm,
+                    heightMm: recommendation.preset.heightMm
                 };
 
             const job: PrintJob = {
@@ -242,8 +246,11 @@ export const optimizePrintOrder = (jobs: PrintJob[]): PrintJob[] => {
     const grouped = new Map<string, PrintJob[]>();
 
     jobs.forEach(job => {
-        // Extract label size from settings (would need actual preset info)
-        const key = 'default'; // Simplified
+        // Extract label size from settings
+        const width = job.settings.widthMm || 0;
+        const height = job.settings.heightMm || 0;
+        const key = width && height ? `${width}x${height}` : 'default';
+
         if (!grouped.has(key)) {
             grouped.set(key, []);
         }
