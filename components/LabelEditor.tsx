@@ -154,8 +154,8 @@ const LabelEditor: React.FC<LabelEditorProps> = ({
         </div>
 
         <div className="grid grid-cols-2 gap-4 mb-4 mt-2">
-          <div className="col-span-1">
-            <label className="text-xs text-gray-400 uppercase font-bold tracking-wider flex items-center gap-1.5 mb-1">
+          <div className="col-span-1 group">
+            <label className="text-xs text-gray-400 uppercase font-bold tracking-wider flex items-center gap-1.5 mb-1 group-focus-within:text-cyan-400 transition-colors">
                 <Type size={12} className="text-cyan-500" />
                 Brand
                 <button onClick={() => toggleField('brand')} className="text-gray-600 hover:text-cyan-400 ml-auto">
@@ -166,11 +166,12 @@ const LabelEditor: React.FC<LabelEditorProps> = ({
               type="text" 
               value={data.brand} 
               onChange={(e) => handleChange('brand', e.target.value)}
-              className={`w-full bg-gray-950 border border-gray-750 rounded p-2 text-white focus:border-cyan-500 outline-none ${!settings.visibleFields.brand ? 'opacity-50' : ''}`}
+              className={`w-full bg-gray-950 border border-gray-700 rounded-xl px-3 py-2.5 text-white text-sm focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500/50 outline-none transition-all placeholder-gray-700 font-medium ${!settings.visibleFields.brand ? 'opacity-50' : ''}`}
+              placeholder="e.g. Prusament"
             />
           </div>
-          <div className="col-span-1">
-            <label className="text-xs text-gray-400 uppercase font-bold tracking-wider flex items-center gap-1.5 mb-1">
+          <div className="col-span-1 group">
+            <label className="text-xs text-gray-400 uppercase font-bold tracking-wider flex items-center gap-1.5 mb-1 group-focus-within:text-cyan-400 transition-colors">
                 <Layers size={12} className="text-cyan-500" />
                 Material
             </label>
@@ -178,37 +179,38 @@ const LabelEditor: React.FC<LabelEditorProps> = ({
               type="text" 
               value={data.material} 
               onChange={(e) => handleChange('material', e.target.value)}
-              className="w-full bg-gray-950 border border-gray-750 rounded p-2 text-white focus:border-cyan-500 outline-none"
+              className="w-full bg-gray-950 border border-gray-700 rounded-xl px-3 py-2.5 text-white text-sm focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500/50 outline-none transition-all placeholder-gray-700 font-medium"
+              placeholder="e.g. PLA"
             />
           </div>
         </div>
 
         <div className="grid grid-cols-3 gap-4 mb-4">
-             <div className="col-span-2">
-                <label className="text-xs text-gray-400 uppercase font-bold tracking-wider mb-1 flex items-center gap-1.5">
+             <div className="col-span-2 group">
+                <label className="text-xs text-gray-400 uppercase font-bold tracking-wider mb-1 flex items-center gap-1.5 group-focus-within:text-cyan-400 transition-colors">
                     <Palette size={12} className="text-cyan-500" />
                     Color Name
                 </label>
-                <div className="flex gap-2">
-                    <div className="relative w-10 h-10 flex-shrink-0">
+                <div className="flex gap-3">
+                    <div className="relative w-11 h-11 flex-shrink-0 group/color">
                         <input 
                             type="color" 
                             value={data.colorHex || '#ffffff'}
                             onChange={(e) => handleChange('colorHex', e.target.value)}
-                            className="w-full h-full rounded border border-gray-600 shadow-inner overflow-hidden cursor-pointer p-0 opacity-0 absolute inset-0 z-10"
+                            className="w-full h-full rounded-xl border-2 border-gray-600 overflow-hidden cursor-pointer p-0 opacity-0 absolute inset-0 z-10"
                         />
-                        <div className="w-full h-full rounded border border-gray-600 shadow-inner" style={{backgroundColor: data.colorHex || '#fff'}}></div>
+                        <div className="w-full h-full rounded-xl border-2 border-gray-700 shadow-lg transition-transform group-hover/color:scale-105" style={{backgroundColor: data.colorHex || '#fff'}}></div>
                     </div>
                     <input 
                         type="text" 
                         value={data.colorName} 
                         onChange={(e) => handleChange('colorName', e.target.value)}
-                        className="flex-1 bg-gray-950 border border-gray-750 rounded p-2 text-white focus:border-cyan-500 outline-none"
-                        placeholder="Color"
+                        className="flex-1 bg-gray-950 border border-gray-700 rounded-xl px-3 py-2.5 text-white text-sm focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500/50 outline-none transition-all placeholder-gray-700 font-medium"
+                        placeholder="e.g. Galaxy Black"
                     />
                 </div>
                 {/* Quick Colors */}
-                <div className="flex gap-1.5 mt-2 flex-wrap">
+                <div className="flex gap-2 mt-3 overflow-x-auto pb-1 no-scrollbar mask-gradient-r">
                     {PRESET_COLORS.map(c => (
                         <button
                             key={c.hex}
@@ -218,15 +220,15 @@ const LabelEditor: React.FC<LabelEditorProps> = ({
                                     handleChange('colorName', c.name);
                                 }
                             }}
-                            className={`w-4 h-4 rounded-full border border-gray-600 shadow-sm hover:scale-125 transition-transform ${data.colorHex === c.hex ? 'ring-2 ring-cyan-400' : ''}`}
+                            className={`w-6 h-6 rounded-full border border-gray-600 shadow-sm hover:scale-110 transition-all flex-shrink-0 ${data.colorHex === c.hex ? 'ring-2 ring-offset-2 ring-offset-gray-900 ring-cyan-400 scale-110' : 'opacity-70 hover:opacity-100'}`}
                             style={{backgroundColor: c.hex}}
                             title={c.name}
                         />
                     ))}
                 </div>
              </div>
-             <div>
-                <label className="text-xs text-gray-400 uppercase font-bold tracking-wider mb-1 flex items-center gap-1.5">
+             <div className="group">
+                <label className="text-xs text-gray-400 uppercase font-bold tracking-wider mb-1 flex items-center gap-1.5 group-focus-within:text-cyan-400 transition-colors">
                     <Weight size={12} className="text-cyan-500" />
                     Weight
                 </label>
@@ -234,7 +236,7 @@ const LabelEditor: React.FC<LabelEditorProps> = ({
                     type="text" 
                     value={data.weight} 
                     onChange={(e) => handleChange('weight', e.target.value)}
-                    className="w-full bg-gray-950 border border-gray-750 rounded p-2 text-white focus:border-cyan-500 outline-none text-center"
+                    className="w-full bg-gray-950 border border-gray-700 rounded-xl px-3 py-2.5 text-white text-sm focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500/50 outline-none text-center transition-all font-medium"
                     placeholder="1kg"
                 />
              </div>
@@ -299,19 +301,21 @@ const LabelEditor: React.FC<LabelEditorProps> = ({
 
         {/* Open Date */}
         <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="text-xs text-gray-400 uppercase font-bold tracking-wider mb-1 flex items-center gap-1.5">
-                <CalendarPlus size={12} className="text-cyan-500" />
-                Open Date
-            </label>
-            <input 
-              type="date" 
-              value={data.openDate || ''} 
-              onChange={(e) => handleChange('openDate', e.target.value)}
-              className="w-full bg-gray-950 border border-gray-750 rounded p-2 text-white text-sm focus:border-cyan-500 outline-none"
-            />
-          </div>
-          <div>
+          {settings.visibleFields.date && (
+            <div>
+              <label className="text-xs text-gray-400 uppercase font-bold tracking-wider mb-1 flex items-center gap-1.5">
+                  <CalendarPlus size={12} className="text-cyan-500" />
+                  Open Date
+              </label>
+              <input
+                type="date"
+                value={data.openDate || ''}
+                onChange={(e) => handleChange('openDate', e.target.value)}
+                className="w-full bg-gray-950 border border-gray-750 rounded p-2 text-white text-sm focus:border-cyan-500 outline-none"
+              />
+            </div>
+          )}
+          <div className={settings.visibleFields.date ? '' : 'col-span-2'}>
             <label className="text-xs text-gray-400 uppercase font-bold tracking-wider mb-1 flex items-center gap-1.5">
                 <Droplets size={12} className={`${data.hygroscopy === 'high' ? 'text-red-400' : data.hygroscopy === 'medium' ? 'text-yellow-400' : 'text-green-400'}`} />
                 Hygroscopy

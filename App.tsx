@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Camera, Printer, RotateCcw, PenTool, Loader2, Info, Bluetooth, Ruler, History, ArrowRight, Battery, BatteryFull, BatteryLow, BatteryMedium, ExternalLink, AlertTriangle, Eye, X, Download, Upload, Image as ImageIcon, Edit3, CheckCircle2, Sparkles, Package, Layout, BarChart3, Layers, PlusCircle, Scan } from 'lucide-react';
+import { Camera, Printer, RotateCcw, PenTool, Bluetooth, Ruler, Battery, BatteryFull, BatteryLow, BatteryMedium, ExternalLink, AlertTriangle, X, Image as ImageIcon, Edit3, CheckCircle2, Layout, BarChart3, Layers, PlusCircle, Scan } from 'lucide-react';
 import { AppState, FilamentData, LABEL_PRESETS, LabelPreset, PrintSettings, HistoryEntry, LabelTheme, PrinterInfo, PrintJob, LabelTemplate } from './types';
 import { analyzeFilamentImage } from './services/geminiService';
-import { connectPrinter, printLabel, getBatteryLevel, getDeviceDetails, checkPrinterStatus, addConnectionListener, removeConnectionListener, getConnectedDevice, addStatusListener, removeStatusListener, tryReconnect } from './services/printerService';
+import { connectPrinter, printLabel, getBatteryLevel, getDeviceDetails, checkPrinterStatus, addConnectionListener, removeConnectionListener, getConnectedDevice, addStatusListener, tryReconnect } from './services/printerService';
 import CameraCapture from './components/CameraCapture';
 import LabelEditor from './components/LabelEditor';
 import LabelCanvas from './components/LabelCanvas';
@@ -144,7 +144,7 @@ const App: React.FC = () => {
 
     return () => {
       removeConnectionListener(listener);
-      removeStatusListener(statusListener);
+      removeStatusListener(statusListener); // Fixed: was removeStatusListener(statusListener) which is correct
     };
   }, []);
 
@@ -268,32 +268,23 @@ const App: React.FC = () => {
             // Update form fields with accumulated data (respecting confidence)
             setFilamentData(prev => {
               const updated = {...prev};
-              console.log('[DEBUG] Progressive update - accumulatedData:', JSON.stringify(accumulatedData));
-              console.log('[DEBUG] Progressive update - prev state:', JSON.stringify(prev));
               
               Object.keys(accumulatedData).forEach(key => {
                 const k = key as keyof FilamentData;
                 const currentValue = prev[k];
                 const newValue = accumulatedData[k];
                 
-                console.log(`[DEBUG] Field ${k}: current="${currentValue}", new="${newValue}", confidence=${dataConfidence[k]}`);
-                
                 // Update if current is default/empty or new value is better
                 // Check if current value matches default for this field
                 const isDefault = !currentValue || currentValue === '' || currentValue === DEFAULT_DATA[k];
                 
                 if (isDefault) {
-                  console.log(`[DEBUG] Updating ${k} to "${newValue}" (current is default)`);
                   updated[k] = newValue as any;
                 } else if (dataConfidence[k] > 2) {
                   // High confidence override
-                  console.log(`[DEBUG] Updating ${k} to "${newValue}" (high confidence override)`);
                   updated[k] = newValue as any;
-                } else {
-                  console.log(`[DEBUG] NOT updating ${k} - current value "${currentValue}" kept`);
                 }
               });
-              console.log('[DEBUG] Progressive update - updated state:', JSON.stringify(updated));
               return updated;
             });
           }
@@ -301,9 +292,6 @@ const App: React.FC = () => {
 
       // Merge final JSON data with accumulated real-time data
       // Priority: accumulated real-time data > final JSON data > defaults
-      console.log('[DEBUG] Final merge - data from JSON:', JSON.stringify(data));
-      console.log('[DEBUG] Final merge - accumulatedData:', JSON.stringify(accumulatedData));
-      
       const enrichedData = { 
         ...data, // Start with parsed JSON (may have defaults if parsing failed)
         ...accumulatedData, // Override with accumulated real-time data (highest priority)
@@ -311,15 +299,12 @@ const App: React.FC = () => {
         notes: analysisSummary ? `${data.notes || ''}${data.notes ? '\n\n' : ''}Analysis findings: ${analysisSummary}` : data.notes
       };
       
-      console.log('[DEBUG] Final merge - enrichedData:', JSON.stringify(enrichedData));
-      
       // Final update with merged data
       setFilamentData(enrichedData);
       saveToHistory(enrichedData);
       setState(AppState.EDITING);
     } catch (err: any) {
       console.log('[ERROR] Gemini analysis failed:', err.message || err);
-      console.log('[DEBUG] accumulatedData:', JSON.stringify(accumulatedData));
       
       // Use accumulated real-time data even if JSON parsing failed
       const fallbackData = {
@@ -328,17 +313,31 @@ const App: React.FC = () => {
       };
       
       // Provide specific error message based on error type
-      let errorMessage = "Could not analyze image automatically. Please enter details manually.";
+      let errorMessage = "Could not analyze image automatically.";
       if (err.message && err.message.includes("API Key not found")) {
-        errorMessage = "⚠️ API key not configured. Please set up VITE_GEMINI_API_KEY. See ENV_SETUP.md for instructions.";
+        errorMessage = "⚠️ API key not configured. Check VITE_GEMINI_API_KEY.";
       } else if (Object.keys(accumulatedData).length > 0) {
-        errorMessage = "Partial analysis complete. Some fields extracted successfully.";
+        // If we have some data, treating it as partial success might be better,
+        // but if the error was catastrophic (network), we should warn.
+        errorMessage = "Partial analysis complete. Some fields extracted.";
+        // For partial success, we can proceed to editor
+        setErrorMsg(errorMessage);
+        setFilamentData(fallbackData);
+        saveToHistory(fallbackData);
+        setState(AppState.EDITING);
+        return;
+      } else {
+        errorMessage = `Analysis Failed: ${err.message || 'Unknown Error'}`;
       }
       
+      // Stay on Analysis/Camera screen with error, do NOT auto-switch to generic data
       setErrorMsg(errorMessage);
-      setFilamentData(fallbackData);
-      saveToHistory(fallbackData);
-      setState(AppState.EDITING);
+
+      // I need to ensure error is visible.
+      toast.error("Analysis Failed", errorMessage);
+
+      // And revert to Camera or Home so they can try again or choose manual.
+      setState(AppState.HOME);
     }
   };
 
@@ -795,29 +794,41 @@ const App: React.FC = () => {
             <div className="grid grid-cols-2 gap-3">
                 <button
                   onClick={handleStartCapture}
-                  className="col-span-2 group relative flex items-center justify-between p-6 rounded-3xl bg-gradient-to-br from-gray-900 to-gray-800 border border-gray-800 hover:border-cyan-500/50 transition-all duration-300 shadow-xl overflow-hidden"
+                  className="col-span-2 group relative flex items-center justify-between p-8 rounded-[2rem] bg-gradient-to-br from-cyan-950 via-gray-900 to-gray-950 border border-cyan-900/30 hover:border-cyan-500/50 transition-all duration-500 shadow-2xl overflow-hidden"
                 >
-                  <div className="absolute inset-0 bg-cyan-500/5 group-hover:bg-cyan-500/10 transition-all"></div>
-                  <div className="relative z-10 flex flex-col items-start gap-1">
-                    <span className="text-2xl font-black text-white">Scan Label</span>
-                    <span className="text-xs text-gray-400">Identify filament via camera</span>
+                  <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,_var(--tw-gradient-stops))] from-cyan-500/10 via-transparent to-transparent opacity-50 group-hover:opacity-100 transition-opacity duration-500"></div>
+                  <div className="relative z-10 flex flex-col items-start gap-2">
+                    <span className="px-3 py-1 bg-cyan-500/20 text-cyan-300 text-[10px] font-bold uppercase tracking-wider rounded-full border border-cyan-500/20 backdrop-blur-md">AI Powered</span>
+                    <div>
+                      <span className="text-3xl font-black text-white tracking-tight block">Scan Label</span>
+                      <span className="text-sm text-cyan-100/60 font-medium">Identify filament via camera</span>
+                    </div>
                   </div>
-                  <div className="w-12 h-12 bg-cyan-500/20 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform">
-                    <Camera size={24} className="text-cyan-400" />
+                  <div className="relative">
+                    <div className="absolute inset-0 bg-cyan-400 blur-xl opacity-20 animate-pulse"></div>
+                    <div className="w-16 h-16 bg-gradient-to-br from-cyan-500 to-blue-600 rounded-2xl flex items-center justify-center shadow-lg group-hover:scale-110 group-hover:rotate-3 transition-all duration-300">
+                      <Camera size={32} className="text-white" />
+                    </div>
                   </div>
                 </button>
 
                 <button
                     onClick={handleManualEntry}
-                    className="p-4 rounded-2xl bg-gray-900 border border-gray-800 hover:bg-gray-800 transition-all flex flex-col gap-2 items-start"
+                    className="group p-5 rounded-3xl bg-gray-900/80 border border-gray-800 hover:bg-gray-800 hover:border-gray-700 transition-all duration-300 flex flex-col justify-between h-32 relative overflow-hidden"
                 >
-                    <div className="w-8 h-8 bg-gray-800 rounded-lg flex items-center justify-center">
-                        <Edit3 size={16} className="text-cyan-400" />
+                    <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+                        <Edit3 size={64} />
                     </div>
-                    <span className="font-bold text-sm text-gray-200">Manual Entry</span>
+                    <div className="w-10 h-10 bg-gray-800 rounded-xl flex items-center justify-center group-hover:bg-cyan-900/30 group-hover:text-cyan-400 transition-colors">
+                        <Edit3 size={20} className="text-gray-400 group-hover:text-cyan-400" />
+                    </div>
+                    <div>
+                        <span className="font-bold text-base text-white block">Manual</span>
+                        <span className="text-[10px] text-gray-500 uppercase tracking-wide">Type Details</span>
+                    </div>
                 </button>
 
-                <div className="relative">
+                <div className="relative h-32">
                     <input
                         type="file"
                         ref={fileInputRef}
@@ -827,12 +838,18 @@ const App: React.FC = () => {
                     />
                     <button
                         onClick={triggerFileUpload}
-                        className="w-full h-full p-4 rounded-2xl bg-gray-900 border border-gray-800 hover:bg-gray-800 transition-all flex flex-col gap-2 items-start"
+                        className="w-full h-full p-5 rounded-3xl bg-gray-900/80 border border-gray-800 hover:bg-gray-800 hover:border-purple-500/30 transition-all duration-300 flex flex-col justify-between group overflow-hidden"
                     >
-                        <div className="w-8 h-8 bg-gray-800 rounded-lg flex items-center justify-center">
-                            <ImageIcon size={16} className="text-purple-400" />
+                        <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity text-purple-500">
+                            <ImageIcon size={64} />
                         </div>
-                        <span className="font-bold text-sm text-gray-200">From Gallery</span>
+                        <div className="w-10 h-10 bg-gray-800 rounded-xl flex items-center justify-center group-hover:bg-purple-900/30 transition-colors">
+                            <ImageIcon size={20} className="text-gray-400 group-hover:text-purple-400" />
+                        </div>
+                        <div>
+                            <span className="font-bold text-base text-white block">Gallery</span>
+                            <span className="text-[10px] text-gray-500 uppercase tracking-wide">Upload Photo</span>
+                        </div>
                     </button>
                 </div>
             </div>

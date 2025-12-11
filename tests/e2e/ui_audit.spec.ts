@@ -14,7 +14,8 @@ test.describe('UI Audit Tour', () => {
     await expect(page.getByText('Scan Label')).toBeVisible();
 
     // 2. Manual Entry -> Editor
-    await page.getByText('Manual Entry').click();
+    // Updated selector to match "Manual" text instead of "Manual Entry"
+    await page.getByText('Manual', { exact: true }).click();
     await expect(page.getByText('Customize')).toBeVisible();
 
     // 3. Editor Interactions
