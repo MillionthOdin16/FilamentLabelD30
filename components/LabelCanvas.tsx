@@ -443,7 +443,7 @@ const LabelCanvas: React.FC<LabelCanvasProps> = ({
         ctx.roundRect(startX + contentW - weightBadgeW, startY, weightBadgeW, brandH, 6 * s);
         ctx.fill();
 
-        if (settings.visibleFields.date && data.openDate) {
+        if (settings.visibleFields?.date && data.openDate) {
            // SHOW DATE INSTEAD OF WEIGHT
            const dateStr = new Date(data.openDate).toLocaleDateString(undefined, { month: 'numeric', year: '2-digit' });
            drawIcon('time', startX + contentW - weightBadgeW + (8 * s), startY + (brandH - (brandH * 0.5)) / 2, brandH * 0.5, fg);
