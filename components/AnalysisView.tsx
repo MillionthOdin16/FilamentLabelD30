@@ -118,35 +118,35 @@ const AnalysisView: React.FC<AnalysisViewProps> = ({ imageSrc, logs, boxes, onCo
       </div>
 
       {/* Main Content */}
-      <div className="relative z-10 flex flex-col h-full p-6 max-w-lg mx-auto w-full">
+      <div className="relative z-10 flex flex-col h-full p-3 sm:p-4 md:p-6 max-w-lg mx-auto w-full">
         
         {/* Header */}
-        <div className="flex justify-between items-start mb-6 animate-fade-in-down">
+        <div className="flex justify-between items-start mb-3 sm:mb-4 md:mb-6 animate-fade-in-down">
            <div>
-             <h2 className="text-2xl font-black tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-500">
+             <h2 className="text-lg sm:text-xl md:text-2xl font-black tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-500">
                  NEURAL SCAN
              </h2>
-             <div className="flex items-center gap-2 mt-1">
-                 <div className="w-2 h-2 rounded-full bg-cyan-500 animate-ping"></div>
-                 <p className="text-xs font-mono text-cyan-600 font-bold uppercase tracking-widest">
+             <div className="flex items-center gap-1.5 sm:gap-2 mt-1">
+                 <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-cyan-500 animate-ping"></div>
+                 <p className="text-[10px] sm:text-xs font-mono text-cyan-600 font-bold uppercase tracking-wider sm:tracking-widest">
                      Gemini 2.5 Flash Processing
                  </p>
              </div>
            </div>
 
-           <div className="flex flex-col items-end gap-2">
-             <div className="flex items-center gap-2 bg-gray-900/80 backdrop-blur border border-gray-800 px-3 py-1.5 rounded-full shadow-lg">
+           <div className="flex flex-col items-end gap-1.5 sm:gap-2">
+             <div className="flex items-center gap-1.5 sm:gap-2 bg-gray-900/80 backdrop-blur border border-gray-800 px-2 sm:px-3 py-1 sm:py-1.5 rounded-full shadow-lg">
                {getStageIcon()}
-               <span className="text-xs font-bold font-mono text-gray-200 uppercase tracking-wide">
+               <span className="text-[10px] sm:text-xs font-bold font-mono text-gray-200 uppercase tracking-wide hidden sm:inline">
                   {processingStage}
                </span>
              </div>
              
              {/* Confidence Meter */}
              {showConfidence && confidence > 0 && (
-               <div className="bg-gray-900/80 backdrop-blur border border-gray-800 px-3 py-1.5 rounded-full shadow-lg animate-fade-in-down">
-                 <div className="flex items-center gap-2">
-                   <div className="w-16 h-1.5 bg-gray-800 rounded-full overflow-hidden">
+               <div className="bg-gray-900/80 backdrop-blur border border-gray-800 px-2 sm:px-3 py-1 sm:py-1.5 rounded-full shadow-lg animate-fade-in-down">
+                 <div className="flex items-center gap-1.5 sm:gap-2">
+                   <div className="w-12 sm:w-16 h-1.5 bg-gray-800 rounded-full overflow-hidden">
                      <div 
                        className={`h-full rounded-full transition-all duration-500 ${
                          confidence >= 80 ? 'bg-green-500' : 
@@ -170,10 +170,10 @@ const AnalysisView: React.FC<AnalysisViewProps> = ({ imageSrc, logs, boxes, onCo
         </div>
 
         {/* Central Visualization Area */}
-        <div className="relative flex-1 flex flex-col items-center justify-start gap-4">
+        <div className="relative flex-1 flex flex-col items-center justify-start gap-3 sm:gap-4 overflow-y-auto">
             
             {/* Image Preview with Bounding Boxes */}
-            <div className="relative w-full max-w-xs aspect-square rounded-2xl border-2 border-cyan-500/30 overflow-hidden shadow-2xl shadow-cyan-900/20 group animate-fade-in-scale">
+            <div className="relative w-full max-w-[280px] sm:max-w-xs aspect-square rounded-xl sm:rounded-2xl border-2 border-cyan-500/30 overflow-hidden shadow-2xl shadow-cyan-900/20 group animate-fade-in-scale">
                 <img src={imageSrc} className="w-full h-full object-cover" alt="Target" />
 
                 {/* Scanning Beam */}
@@ -216,11 +216,11 @@ const AnalysisView: React.FC<AnalysisViewProps> = ({ imageSrc, logs, boxes, onCo
             </div>
 
             {/* Real-time Data Cards */}
-            <div className="w-full grid grid-cols-2 gap-3 animate-fade-in-up" style={{animationDelay: '0.2s'}}>
+            <div className="w-full grid grid-cols-2 gap-2 sm:gap-3 animate-fade-in-up" style={{animationDelay: '0.2s'}}>
 
                 {/* Brand Card */}
                 <div className={`
-                    p-3 rounded-xl border transition-all duration-500 relative overflow-hidden
+                    p-2 sm:p-3 rounded-lg sm:rounded-xl border transition-all duration-500 relative overflow-hidden
                     ${detectedData?.brand
                         ? 'bg-gradient-to-br from-gray-900 to-gray-800 border-cyan-500/50 shadow-lg shadow-cyan-900/20 translate-y-0 opacity-100'
                         : 'bg-gray-900/30 border-gray-800/50 opacity-50'}
@@ -229,14 +229,14 @@ const AnalysisView: React.FC<AnalysisViewProps> = ({ imageSrc, logs, boxes, onCo
                         <div className="absolute inset-0 bg-gradient-to-r from-cyan-500/10 to-transparent animate-pulse-slow"></div>
                     )}
                     <div className="relative z-10">
-                        <div className="text-[10px] text-gray-500 uppercase font-bold mb-1 flex items-center gap-1">
-                            <Target size={10} className={detectedData?.brand ? "text-cyan-400" : "text-gray-600"} />
+                        <div className="text-[9px] sm:text-[10px] text-gray-500 uppercase font-bold mb-0.5 sm:mb-1 flex items-center gap-1">
+                            <Target size={9} className={detectedData?.brand ? "text-cyan-400" : "text-gray-600"} />
                             Brand
                             {detectedData?.brand && (
-                                <CheckCircle2 size={10} className="text-green-400 ml-auto animate-appear-pop" />
+                                <CheckCircle2 size={9} className="text-green-400 ml-auto animate-appear-pop" />
                             )}
                         </div>
-                        <div className={`font-bold truncate ${detectedData?.brand ? "text-white text-lg" : "text-gray-700 text-sm italic"}`}>
+                        <div className={`font-bold truncate ${detectedData?.brand ? "text-white text-sm sm:text-lg" : "text-gray-700 text-xs sm:text-sm italic"}`}>
                             {detectedData?.brand || "Detecting..."}
                         </div>
                     </div>
@@ -244,7 +244,7 @@ const AnalysisView: React.FC<AnalysisViewProps> = ({ imageSrc, logs, boxes, onCo
 
                 {/* Material Card */}
                 <div className={`
-                    p-3 rounded-xl border transition-all duration-500 delay-75 relative overflow-hidden
+                    p-2 sm:p-3 rounded-lg sm:rounded-xl border transition-all duration-500 delay-75 relative overflow-hidden
                     ${detectedData?.material
                         ? 'bg-gradient-to-br from-gray-900 to-gray-800 border-purple-500/50 shadow-lg shadow-purple-900/20 translate-y-0 opacity-100'
                         : 'bg-gray-900/30 border-gray-800/50 opacity-50'}
@@ -253,14 +253,14 @@ const AnalysisView: React.FC<AnalysisViewProps> = ({ imageSrc, logs, boxes, onCo
                         <div className="absolute inset-0 bg-gradient-to-r from-purple-500/10 to-transparent animate-pulse-slow"></div>
                     )}
                     <div className="relative z-10">
-                        <div className="text-[10px] text-gray-500 uppercase font-bold mb-1 flex items-center gap-1">
-                            <Zap size={10} className={detectedData?.material ? "text-purple-400" : "text-gray-600"} />
+                        <div className="text-[9px] sm:text-[10px] text-gray-500 uppercase font-bold mb-0.5 sm:mb-1 flex items-center gap-1">
+                            <Zap size={9} className={detectedData?.material ? "text-purple-400" : "text-gray-600"} />
                             Material
                             {detectedData?.material && (
-                                <CheckCircle2 size={10} className="text-green-400 ml-auto animate-appear-pop" />
+                                <CheckCircle2 size={9} className="text-green-400 ml-auto animate-appear-pop" />
                             )}
                         </div>
-                        <div className={`font-bold truncate ${detectedData?.material ? "text-white text-lg" : "text-gray-700 text-sm italic"}`}>
+                        <div className={`font-bold truncate ${detectedData?.material ? "text-white text-sm sm:text-lg" : "text-gray-700 text-xs sm:text-sm italic"}`}>
                             {detectedData?.material || "Scanning..."}
                         </div>
                     </div>
@@ -268,7 +268,7 @@ const AnalysisView: React.FC<AnalysisViewProps> = ({ imageSrc, logs, boxes, onCo
 
                 {/* Color Card */}
                 <div className={`
-                    p-3 rounded-xl border transition-all duration-500 delay-100 col-span-2 relative overflow-hidden
+                    p-2 sm:p-3 rounded-lg sm:rounded-xl border transition-all duration-500 delay-100 col-span-2 relative overflow-hidden
                     ${detectedData?.colorName
                         ? 'bg-gradient-to-br from-gray-900 to-gray-800 border-yellow-500/50 shadow-lg shadow-yellow-900/20 translate-y-0 opacity-100'
                         : 'bg-gray-900/30 border-gray-800/50 opacity-50'}
@@ -277,23 +277,23 @@ const AnalysisView: React.FC<AnalysisViewProps> = ({ imageSrc, logs, boxes, onCo
                         <div className="absolute inset-0 bg-gradient-to-r from-yellow-500/10 to-transparent animate-pulse-slow"></div>
                     )}
                     <div className="relative z-10">
-                        <div className="text-[10px] text-gray-500 uppercase font-bold mb-1 flex items-center gap-1">
-                            <Sparkles size={10} className={detectedData?.colorName ? "text-yellow-400" : "text-gray-600"} />
+                        <div className="text-[9px] sm:text-[10px] text-gray-500 uppercase font-bold mb-0.5 sm:mb-1 flex items-center gap-1">
+                            <Sparkles size={9} className={detectedData?.colorName ? "text-yellow-400" : "text-gray-600"} />
                             Color & Specs
                             {detectedData?.colorName && (
-                                <CheckCircle2 size={10} className="text-green-400 ml-auto animate-appear-pop" />
+                                <CheckCircle2 size={9} className="text-green-400 ml-auto animate-appear-pop" />
                             )}
                         </div>
-                        <div className="flex items-center justify-between">
-                             <div className={`font-bold flex items-center gap-2 ${detectedData?.colorName ? "text-white" : "text-gray-700 italic"}`}>
+                        <div className="flex items-center justify-between gap-2">
+                             <div className={`font-bold flex items-center gap-1.5 sm:gap-2 truncate ${detectedData?.colorName ? "text-white text-sm sm:text-base" : "text-gray-700 text-xs sm:text-sm italic"}`}>
                                 {detectedData?.colorHex && isValidHexColor(detectedData.colorHex) && (
-                                    <div className="w-4 h-4 rounded-full border border-white/20 shadow-sm animate-appear-pop" style={{backgroundColor: detectedData.colorHex}}></div>
+                                    <div className="w-3 h-3 sm:w-4 sm:h-4 rounded-full border border-white/20 shadow-sm animate-appear-pop shrink-0" style={{backgroundColor: detectedData.colorHex}}></div>
                                 )}
-                                {detectedData?.colorName || "Analyzing..."}
+                                <span className="truncate">{detectedData?.colorName || "Analyzing..."}</span>
                             </div>
 
                             {detectedData?.minTemp && (
-                                <div className="text-xs font-mono text-gray-400 bg-black/40 px-2 py-1 rounded animate-appear-pop">
+                                <div className="text-[10px] sm:text-xs font-mono text-gray-400 bg-black/40 px-1.5 sm:px-2 py-0.5 sm:py-1 rounded animate-appear-pop whitespace-nowrap">
                                     {detectedData.minTemp}-{detectedData.maxTemp}°C
                                 </div>
                             )}
@@ -302,25 +302,25 @@ const AnalysisView: React.FC<AnalysisViewProps> = ({ imageSrc, logs, boxes, onCo
                 </div>
 
                 {/* Additional Data Grid - Expanded */}
-                <div className="col-span-2 grid grid-cols-2 gap-2 animate-fade-in-up" style={{animationDelay: '0.4s'}}>
+                <div className="col-span-2 grid grid-cols-2 gap-1.5 sm:gap-2 animate-fade-in-up" style={{animationDelay: '0.4s'}}>
                     {/* Weight */}
                     {detectedData?.weight && (
-                        <div className="p-2 rounded-lg bg-gray-900/50 border border-gray-800 relative overflow-hidden group">
+                        <div className="p-1.5 sm:p-2 rounded-lg bg-gray-900/50 border border-gray-800 relative overflow-hidden group">
                             <div className="absolute inset-0 bg-gradient-to-r from-cyan-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
                             <div className="relative z-10">
-                                <div className="text-[9px] text-gray-600 uppercase font-bold mb-0.5">Weight</div>
-                                <div className="text-sm font-bold text-cyan-400">{detectedData.weight}</div>
+                                <div className="text-[8px] sm:text-[9px] text-gray-600 uppercase font-bold mb-0.5">Weight</div>
+                                <div className="text-xs sm:text-sm font-bold text-cyan-400">{detectedData.weight}</div>
                             </div>
                         </div>
                     )}
                     
                     {/* Bed Temp */}
                     {detectedData?.bedTempMin && (
-                        <div className="p-2 rounded-lg bg-gray-900/50 border border-gray-800 relative overflow-hidden group">
+                        <div className="p-1.5 sm:p-2 rounded-lg bg-gray-900/50 border border-gray-800 relative overflow-hidden group">
                             <div className="absolute inset-0 bg-gradient-to-r from-orange-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
                             <div className="relative z-10">
-                                <div className="text-[9px] text-gray-600 uppercase font-bold mb-0.5">Bed Temp</div>
-                                <div className="text-sm font-bold text-orange-400">
+                                <div className="text-[8px] sm:text-[9px] text-gray-600 uppercase font-bold mb-0.5">Bed Temp</div>
+                                <div className="text-xs sm:text-sm font-bold text-orange-400">
                                     {detectedData.bedTempMin}-{detectedData.bedTempMax}°C
                                 </div>
                             </div>
@@ -329,7 +329,7 @@ const AnalysisView: React.FC<AnalysisViewProps> = ({ imageSrc, logs, boxes, onCo
                     
                     {/* Hygroscopy */}
                     {detectedData?.hygroscopy && (
-                        <div className={`p-2 rounded-lg bg-gray-900/50 border relative overflow-hidden group ${
+                        <div className={`p-1.5 sm:p-2 rounded-lg bg-gray-900/50 border relative overflow-hidden group ${
                             detectedData.hygroscopy === 'high' ? 'border-red-900/50' : 
                             detectedData.hygroscopy === 'medium' ? 'border-yellow-900/50' : 
                             'border-green-900/50'
@@ -340,8 +340,8 @@ const AnalysisView: React.FC<AnalysisViewProps> = ({ imageSrc, logs, boxes, onCo
                                 'from-green-500/5'
                             }`}></div>
                             <div className="relative z-10">
-                                <div className="text-[9px] text-gray-600 uppercase font-bold mb-0.5">Moisture</div>
-                                <div className={`text-sm font-bold capitalize ${
+                                <div className="text-[8px] sm:text-[9px] text-gray-600 uppercase font-bold mb-0.5">Moisture</div>
+                                <div className={`text-xs sm:text-sm font-bold capitalize ${
                                     detectedData.hygroscopy === 'high' ? 'text-red-400' : 
                                     detectedData.hygroscopy === 'medium' ? 'text-yellow-400' : 
                                     'text-green-400'
@@ -354,21 +354,21 @@ const AnalysisView: React.FC<AnalysisViewProps> = ({ imageSrc, logs, boxes, onCo
                     
                     {/* Source */}
                     {detectedData?.source && (
-                        <div className="p-2 rounded-lg bg-gray-900/50 border border-gray-800 relative overflow-hidden group">
+                        <div className="p-1.5 sm:p-2 rounded-lg bg-gray-900/50 border border-gray-800 relative overflow-hidden group">
                             <div className="absolute inset-0 bg-gradient-to-r from-purple-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
                             <div className="relative z-10">
-                                <div className="text-[9px] text-gray-600 uppercase font-bold mb-0.5">Source</div>
-                                <div className="text-xs font-bold text-purple-400 truncate">{detectedData.source}</div>
+                                <div className="text-[8px] sm:text-[9px] text-gray-600 uppercase font-bold mb-0.5">Source</div>
+                                <div className="text-[10px] sm:text-xs font-bold text-purple-400 truncate">{detectedData.source}</div>
                             </div>
                         </div>
                     )}
                     
                     {/* Confidence Score */}
                     {detectedData?.confidence !== undefined && detectedData.confidence > 0 && (
-                        <div className="p-2 rounded-lg bg-gray-900/50 border border-gray-800 relative overflow-hidden group col-span-2">
+                        <div className="p-1.5 sm:p-2 rounded-lg bg-gray-900/50 border border-gray-800 relative overflow-hidden group col-span-2">
                             <div className="absolute inset-0 bg-gradient-to-r from-blue-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
                             <div className="relative z-10">
-                                <div className="text-[9px] text-gray-600 uppercase font-bold mb-1 flex items-center justify-between">
+                                <div className="text-[8px] sm:text-[9px] text-gray-600 uppercase font-bold mb-0.5 sm:mb-1 flex items-center justify-between">
                                     <span>Detection Confidence</span>
                                     <span className={`${
                                         detectedData.confidence >= 80 ? 'text-green-400' : 
@@ -392,14 +392,14 @@ const AnalysisView: React.FC<AnalysisViewProps> = ({ imageSrc, logs, boxes, onCo
                     
                     {/* Reference URL */}
                     {detectedData?.referenceUrl && (
-                        <div className="p-2 rounded-lg bg-gray-900/50 border border-gray-800 relative overflow-hidden group col-span-2">
+                        <div className="p-1.5 sm:p-2 rounded-lg bg-gray-900/50 border border-gray-800 relative overflow-hidden group col-span-2">
                             <div className="absolute inset-0 bg-gradient-to-r from-indigo-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
                             <div className="relative z-10">
-                                <div className="text-[9px] text-gray-600 uppercase font-bold mb-0.5 flex items-center gap-1">
-                                    <Globe size={10} className="text-indigo-400" />
+                                <div className="text-[8px] sm:text-[9px] text-gray-600 uppercase font-bold mb-0.5 flex items-center gap-1">
+                                    <Globe size={9} className="text-indigo-400" />
                                     Reference
                                 </div>
-                                <div className="text-xs text-indigo-400 truncate">{detectedData.referenceUrl}</div>
+                                <div className="text-[10px] sm:text-xs text-indigo-400 truncate">{detectedData.referenceUrl}</div>
                             </div>
                         </div>
                     )}
@@ -408,14 +408,14 @@ const AnalysisView: React.FC<AnalysisViewProps> = ({ imageSrc, logs, boxes, onCo
                 {/* Notes Section */}
                 {detectedData?.notes && detectedData.notes.length > 0 && (
                     <div className="col-span-2 animate-fade-in-up" style={{animationDelay: '0.5s'}}>
-                        <div className="p-3 rounded-lg bg-gray-900/50 border border-gray-800 relative overflow-hidden group">
+                        <div className="p-2 sm:p-3 rounded-lg bg-gray-900/50 border border-gray-800 relative overflow-hidden group">
                             <div className="absolute inset-0 bg-gradient-to-r from-blue-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
                             <div className="relative z-10">
-                                <div className="text-[9px] text-gray-500 uppercase font-bold mb-1.5 flex items-center gap-1">
-                                    <AlertCircle size={10} className="text-blue-400" />
+                                <div className="text-[8px] sm:text-[9px] text-gray-500 uppercase font-bold mb-1 sm:mb-1.5 flex items-center gap-1">
+                                    <AlertCircle size={9} className="text-blue-400" />
                                     Additional Info & Tips
                                 </div>
-                                <div className="text-xs text-gray-300 leading-relaxed max-h-20 overflow-y-auto custom-scrollbar">
+                                <div className="text-[10px] sm:text-xs text-gray-300 leading-relaxed max-h-16 sm:max-h-20 overflow-y-auto custom-scrollbar">
                                     {detectedData.notes}
                                 </div>
                             </div>
@@ -428,20 +428,20 @@ const AnalysisView: React.FC<AnalysisViewProps> = ({ imageSrc, logs, boxes, onCo
         </div>
 
         {/* Logs Terminal */}
-        <div className="mt-auto pt-6">
-            <div className="bg-black/80 backdrop-blur-md border border-gray-800 rounded-xl overflow-hidden shadow-2xl flex flex-col animate-fade-in-up delay-200" style={{height: logs.length > 10 ? '200px' : '160px'}}>
-                <div className="flex items-center justify-between px-3 py-2 border-b border-gray-800 bg-gray-900/50">
-                    <div className="flex items-center gap-2">
-                        <Terminal size={12} className="text-gray-500" />
-                        <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Processing Stream</span>
-                        <span className="text-[9px] bg-cyan-900/30 text-cyan-400 px-1.5 py-0.5 rounded-full">{logs.length}</span>
+        <div className="mt-auto pt-3 sm:pt-4 md:pt-6">
+            <div className="bg-black/80 backdrop-blur-md border border-gray-800 rounded-lg sm:rounded-xl overflow-hidden shadow-2xl flex flex-col animate-fade-in-up delay-200 h-[120px] sm:h-[140px] max-h-[200px]">
+                <div className="flex items-center justify-between px-2 sm:px-3 py-1.5 sm:py-2 border-b border-gray-800 bg-gray-900/50">
+                    <div className="flex items-center gap-1.5 sm:gap-2">
+                        <Terminal className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-gray-500" />
+                        <span className="text-[9px] sm:text-[10px] font-bold text-gray-500 uppercase tracking-wider">Processing Stream</span>
+                        <span className="text-[8px] sm:text-[9px] bg-cyan-900/30 text-cyan-400 px-1 sm:px-1.5 py-0.5 rounded-full">{logs.length}</span>
                     </div>
                     <button onClick={handleCopy} className="text-gray-600 hover:text-white transition-colors p-1 hover:bg-gray-800 rounded" title="Copy logs">
-                        <Copy size={12} />
+                        <Copy className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
                     </button>
                 </div>
 
-                <div ref={scrollRef} className="flex-1 overflow-y-auto p-3 font-mono text-[10px] space-y-1 custom-scrollbar">
+                <div ref={scrollRef} className="flex-1 overflow-y-auto p-2 sm:p-3 font-mono text-[9px] sm:text-[10px] space-y-0.5 sm:space-y-1 custom-scrollbar">
                     {logs.map((log, i) => {
                         const logLower = log.text.toLowerCase();
                         const isImportant = logLower.includes('detected') || 
